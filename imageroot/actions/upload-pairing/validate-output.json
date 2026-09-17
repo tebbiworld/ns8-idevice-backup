@@ -1,0 +1,11 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "upload-pairing output",
+    "$id": "http://schema.nethserver.org/idevice-backup/upload-pairing-output.json",
+    "type": "object",
+    "properties": {
+        "udid": { "type": "string" },
+        "name": { "type": "string" },
+        "ip": { "type": "string" }
+    }
+}

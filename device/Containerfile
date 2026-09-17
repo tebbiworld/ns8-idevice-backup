@@ -1,0 +1,44 @@
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# iOS backup engine based on pymobiledevice3, which connects to a device by
+# explicit IP over WiFi (classic TCP lockdown on port 62078) using an uploaded
+# pairing record — no usbmux, no netmuxd, no mDNS/Bonjour, so it works across
+# subnet boundaries. The container is an idle engine; the module runs the
+# backup helper inside it (podman exec).
+
+ARG PMD3_VERSION=11.14.0
+
+FROM docker.io/library/debian:trixie-slim AS builder
+ARG PMD3_VERSION
+# pymobiledevice3 pulls lzfse, a C extension that is compiled from source, so
+# the builder needs a toolchain and the Python headers. The finished virtualenv
+# is copied into the slim runtime stage; the toolchain does not ship.
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-dev build-essential ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/pmd3 \
+    && /opt/pmd3/bin/pip install --no-cache-dir --upgrade pip wheel \
+    && /opt/pmd3/bin/pip install --no-cache-dir "pymobiledevice3==${PMD3_VERSION}" \
+    && /opt/pmd3/bin/python3 -c "import lzfse; from importlib.metadata import version; print('pmd3', version('pymobiledevice3'))"
+
+FROM docker.io/library/debian:trixie-slim
+ARG PMD3_VERSION
+LABEL org.opencontainers.image.title="idevice-backup" \
+      org.opencontainers.image.description="pymobiledevice3 WiFi iOS backup engine" \
+      org.opencontainers.image.source="https://github.com/tebbiworld/ns8-idevice-backup" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later"
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        python3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/lib/lockdown /data/backups
+COPY --from=builder /opt/pmd3 /opt/pmd3
+COPY idevice-tool /usr/local/bin/idevice-tool
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/idevice-tool /usr/local/bin/entrypoint.sh
+ENV PATH=/opt/pmd3/bin:$PATH \
+    PMD3_VERSION=${PMD3_VERSION}
+WORKDIR /data
+VOLUME /data
+VOLUME /var/lib/lockdown
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

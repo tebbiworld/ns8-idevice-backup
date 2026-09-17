@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Remove a device: its pairing record, its registry entry, and — if asked — its
+# stored backups.
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+import agent
+
+CONTAINER = "idevice-backup"
+UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
+
+data = json.load(sys.stdin)
+udid = str(data["udid"]).strip()
+if not UDID_RE.match(udid):
+    print(agent.SD_ERR + "invalid UDID", file=sys.stderr)
+    sys.exit(2)
+delete_backups = bool(data.get("delete_backups", False))
+
+paths = [f"/var/lib/lockdown/{udid}.plist"]
+if delete_backups:
+    paths.append(f"/data/backups/{udid}")
+subprocess.run(["podman", "exec", CONTAINER, "sh", "-c", "rm -rf " + " ".join(f"'{p}'" for p in paths)],
+               capture_output=True)
+
+try:
+    with open("devices.json") as fp:
+        devices = json.load(fp)
+except FileNotFoundError:
+    devices = {}
+devices.pop(udid, None)
+with open("devices.json.tmp", "w") as fp:
+    json.dump(devices, fp, indent=2)
+os.replace("devices.json.tmp", "devices.json")
+
+json.dump({"udid": udid, "deleted_backups": delete_backups}, fp=sys.stdout)

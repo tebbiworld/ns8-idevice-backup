@@ -1,0 +1,19 @@
+{
+  "name": "iOS Device Backup",
+  "description": {
+    "en": "Back up iPhones and iPads over WiFi with libimobiledevice — upload a pairing file created on your computer, no USB on the server; encrypted backups kept per device",
+    "de": "iPhones und iPads über WLAN sichern mit libimobiledevice — Pairing-Datei vom eigenen Rechner hochladen, kein USB am Server; verschlüsselte Backups je Gerät"
+  },
+  "categories": [
+    "storage"
+  ],
+  "authors": [
+    { "name": "tebbi", "email": "info@ebbinghaus.world" }
+  ],
+  "docs": {
+    "documentation_url": "https://libimobiledevice.org/",
+    "bug_url": "https://github.com/tebbiworld/ns8-idevice-backup/issues",
+    "code_url": "https://github.com/tebbiworld/ns8-idevice-backup"
+  },
+  "source": "ghcr.io/tebbiworld/idevice-backup"
+}

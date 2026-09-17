@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import subprocess
+
+subprocess.run(["systemctl", "--user", "enable", "idevice-backup.service"], check=True)
+subprocess.run(["systemctl", "--user", "restart", "idevice-backup.service"], check=True)

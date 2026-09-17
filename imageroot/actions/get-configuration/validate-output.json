@@ -1,0 +1,27 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-configuration output",
+    "$id": "http://schema.nethserver.org/idevice-backup/get-configuration-output.json",
+    "type": "object",
+    "properties": {
+        "retention": { "type": "integer" },
+        "container_running": { "type": "boolean" },
+        "devices": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "udid": { "type": "string" },
+                    "name": { "type": "string" },
+                    "ip": { "type": "string" },
+                    "paired_at": { "type": "integer" },
+                    "pairing_present": { "type": "boolean" },
+                    "last_backup": { "type": "integer" },
+                    "last_status": { "type": "string" },
+                    "backup_count": { "type": "integer" },
+                    "encryption": { "type": "boolean" }
+                }
+            }
+        }
+    }
+}

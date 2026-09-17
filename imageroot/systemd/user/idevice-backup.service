@@ -1,0 +1,50 @@
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# iOS backup engine: one rootless container running ghcr.io/tebbiworld/idevice-backup-app
+# (built by this module from libimobiledevice + netmuxd, pinned through
+# org.nethserver.images -> ${IDEVICE_BACKUP_APP_IMAGE}).
+#
+# netmuxd runs in the foreground and owns the mux socket on 127.0.0.1:27015
+# inside the container. The module drives backups by running idevicebackup2
+# inside this same container (podman exec), which connects to that socket and
+# reaches the iPhone by outbound TCP to <device_ip>:62078 over WiFi. No host
+# networking and no published ports are needed; devices are added by explicit
+# IP, so no mDNS is used and the connection works across subnet boundaries.
+#
+# Volumes: idevice-lockdown holds the uploaded pairing records
+# (/var/lib/lockdown/<UDID>.plist); idevice-data holds the backups
+# (/data/backups/<UDID>).
+
+[Unit]
+Description=iOS device backup engine (netmuxd)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+TimeoutStartSec=120
+TimeoutStopSec=30
+ExecStartPre=/bin/rm -f %t/idevice-backup.pid %t/idevice-backup.ctr-id
+ExecStart=/usr/bin/podman run \
+    --conmon-pidfile %t/idevice-backup.pid \
+    --cidfile %t/idevice-backup.ctr-id \
+    --cgroups=no-conmon \
+    --replace -d --name idevice-backup \
+    --stop-timeout 20 \
+    --volume idevice-lockdown:/var/lib/lockdown \
+    --volume idevice-data:/data \
+    ${IDEVICE_BACKUP_APP_IMAGE}
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/idevice-backup.ctr-id -t 20
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/idevice-backup.ctr-id
+PIDFile=%t/idevice-backup.pid
+Type=forking
+SyslogIdentifier=%u
+
+[Install]
+WantedBy=default.target

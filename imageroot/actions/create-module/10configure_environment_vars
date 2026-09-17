@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Seed a fresh instance. This module needs no reserved ports and no Traefik
+# route: the UI lives in the cluster-admin, and the container reaches iPhones by
+# outbound TCP. Global options are applied by configure-module; the per-device
+# registry (state/devices.json) is created on the first upload.
+
+import agent
+
+agent.mset_env({
+    "RETENTION": "3",
+})

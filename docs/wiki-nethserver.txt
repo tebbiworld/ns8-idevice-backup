@@ -1,0 +1,50 @@
+======iOS Device Backup======
+NethServer 8 module to back up iPhones and iPads over WiFi with no USB on the server, using [[https://github.com/doronz88/pymobiledevice3|pymobiledevice3]]. Pairing is done once on your own computer (USB); the pairing file is uploaded to the module, which then connects to the device by its IP address over the classic lockdown port (62078).
+
+<note>The end-to-end WiFi backup path is being validated against a physical device; treat it as unproven until a real backup has succeeded.</note>
+
+====Announcement and talks====
+TBA
+
+iOS Device Backup is a community application from the [[ns8:tebbiworld_repository|tebbiworld]] repository. Documentation and source can be found on [[https://github.com/tebbiworld/ns8-idevice-backup|Github]]
+
+=====What it does=====
+  * one rootless container (pymobiledevice3 engine); the module runs backups inside it on demand
+  * connects to a device by explicit IP over classic lockdown TCP 62078 — no usbmux/netmuxd, no mDNS/Bonjour, works across subnet boundaries
+  * upload a jitterbugpair pairing file, set the device IP and an optional backup encryption password
+  * device-side encrypted backups, kept per device with a configurable retention
+  * NS8 backup includes the pairing records and the device registry (not the backups themselves by default)
+
+=====Requirements=====
+  * the server must reach the iPhone on TCP 62078 (route/allow from the server subnet to the WiFi subnet)
+  * the iPhone must have a passcode and WiFi lockdown enabled (see Pairing)
+
+=====Pairing a device (once, on your own computer, iPhone on USB)=====
+  - Create the pairing file with ''jitterbugpair'' ([[https://github.com/osy/Jitterbug|Jitterbug]]) → ''<UDID>.mobiledevicepairing''
+  - In the same USB session, enable WiFi lockdown: ''pymobiledevice3 lockdown wifi-connections on'' (the iPhone needs a passcode). The jitterbugpair file alone only enables WiFi debugging, not WiFi backup.
+  - Upload the file in the module, enter the iPhone's WiFi IP address, optionally set a backup encryption password.
+
+=====Encryption password=====
+If set, device-side backup encryption is enabled on the first backup. iOS encrypts on the device; the password is stored on the iPhone and is required to restore. The module also keeps it in its state (node-admin readable) for scheduled backups and restore. Keep it safe.
+
+=====Backup storage=====
+Backups are stored in the ''idevice-data'' volume (''/data/backups/<UDID>/<timestamp>''). The NS8 backup carries the pairing records and registry, not the device backups themselves by default (they can be large); add ''volumes/idevice-data'' to the include file to change that.
+
+=====Limitations=====
+  * not yet verified end-to-end against a physical device
+  * WiFi lockdown must be enabled on the device (most common connection failure)
+  * DHCP: update the device IP if it changes (a static reservation is recommended)
+  * pairing can expire (re-pair and re-upload)
+  * per-user device ownership via the NS8 user domain (LDAP) is not implemented yet
+
+=====Licences=====
+  * The module (ns8-idevice-backup) is GPL-3.0-or-later.
+  * pymobiledevice3 is installed unmodified from PyPI under its own licence.
+  * Unofficial community module, not affiliated with Apple.
+
+=====Links=====
+  * [[https://github.com/tebbiworld/ns8-idevice-backup|Module source and issues]]
+  * [[https://github.com/doronz88/pymobiledevice3|pymobiledevice3]]
+  * [[https://github.com/osy/Jitterbug|Jitterbug / jitterbugpair]]
+
+{{tag>description:"Back up iPhones and iPads over WiFi with pymobiledevice3, pairing file uploaded, no USB on the server"}}

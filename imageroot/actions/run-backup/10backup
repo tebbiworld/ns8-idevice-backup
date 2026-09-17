@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Run a backup of one device: connect by its IP through the engine container
+# (idevice-tool, pymobiledevice3) and store a timestamped snapshot in the
+# idevice-data volume, then prune snapshots beyond the retention count.
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+import agent
+
+CONTAINER = "idevice-backup"
+UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
+
+
+def load_devices():
+    try:
+        with open("devices.json") as fp:
+            return json.load(fp)
+    except FileNotFoundError:
+        return {}
+
+
+def save_devices(devices):
+    with open("devices.json.tmp", "w") as fp:
+        json.dump(devices, fp, indent=2)
+    os.replace("devices.json.tmp", "devices.json")
+
+
+data = json.load(sys.stdin)
+udid = str(data["udid"]).strip()
+if not UDID_RE.match(udid):
+    print(agent.SD_ERR + "invalid UDID", file=sys.stderr)
+    sys.exit(2)
+
+devices = load_devices()
+dev = devices.get(udid)
+if not dev:
+    print(agent.SD_ERR + "unknown device", file=sys.stderr)
+    sys.exit(2)
+ip = (dev.get("ip") or "").strip()
+if not ip:
+    print(agent.SD_ERR + "set the device WiFi IP address first", file=sys.stderr)
+    sys.exit(2)
+
+retention = int(os.environ.get("RETENTION", "3"))
+ts = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+dest = f"/data/backups/{udid}/{ts}"
+
+enc_pw = dev.get("encryption_password") or ""
+set_encryption = bool(enc_pw) and not dev.get("encryption", False)
+
+cmd = ["podman", "exec"]
+env = os.environ.copy()
+if set_encryption:
+    cmd += ["-e", "IDEVICE_SET_PASSWORD=" + enc_pw]
+cmd += [CONTAINER, "idevice-tool", "backup", "--udid", udid, "--ip", ip, "--dir", dest]
+if set_encryption:
+    cmd += ["--set-password"]
+
+print(agent.SD_INFO + f"starting backup of {dev.get('name', udid)} at {ip} into {dest}", file=sys.stderr)
+proc = subprocess.run(cmd, capture_output=True, text=True)
+out = (proc.stdout or "").strip().splitlines()
+result = {}
+for line in reversed(out):
+    line = line.strip()
+    if line.startswith("{"):
+        try:
+            result = json.loads(line)
+            break
+        except Exception:
+            pass
+
+now = int(time.time())
+if proc.returncode != 0 or not result.get("ok"):
+    etype = result.get("type") or ""
+    err = result.get("error") or etype or (proc.stderr or "").strip()[-500:] or "backup failed"
+    if etype in ("TimeoutError", "ConnectionRefusedError", "OSError", "ConnectionError"):
+        err = (f"could not reach the device at {ip}:62078 ({etype}). Check the IP address, "
+               f"that WiFi lockdown is enabled on the device, and that the server can route to it.")
+    dev["last_status"] = "failed"
+    dev["last_error"] = err[:500]
+    devices[udid] = dev
+    save_devices(devices)
+    print(agent.SD_ERR + "backup failed: " + err, file=sys.stderr)
+    sys.exit(1)
+
+# success: prune old snapshots beyond retention (oldest first)
+prune = subprocess.run(["podman", "exec", CONTAINER, "sh", "-c",
+                        f"ls -1d /data/backups/{udid}/*/ 2>/dev/null | sort | head -n -{retention} | xargs -r rm -rf"],
+                       capture_output=True, text=True)
+
+if result.get("encryption_enabled"):
+    dev["encryption"] = True
+dev["last_backup"] = now
+dev["last_status"] = "ok"
+dev["last_error"] = ""
+devices[udid] = dev
+save_devices(devices)
+
+json.dump({"udid": udid, "snapshot": ts, "status": "ok"}, fp=sys.stdout)

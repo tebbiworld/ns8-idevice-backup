@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Update a device's display name and/or WiFi IP address in the registry
+# (e.g. after a DHCP lease change), without re-uploading the pairing file.
+
+import json
+import os
+import re
+import sys
+
+import agent
+
+UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
+
+data = json.load(sys.stdin)
+udid = str(data["udid"]).strip()
+if not UDID_RE.match(udid):
+    print(agent.SD_ERR + "invalid UDID", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    with open("devices.json") as fp:
+        devices = json.load(fp)
+except FileNotFoundError:
+    devices = {}
+if udid not in devices:
+    print(agent.SD_ERR + "unknown device", file=sys.stderr)
+    sys.exit(2)
+if "name" in data and (data["name"] or "").strip():
+    devices[udid]["name"] = data["name"].strip()
+if "ip" in data:
+    devices[udid]["ip"] = (data["ip"] or "").strip()
+with open("devices.json.tmp", "w") as fp:
+    json.dump(devices, fp, indent=2)
+os.replace("devices.json.tmp", "devices.json")
+json.dump({"udid": udid, "name": devices[udid]["name"], "ip": devices[udid]["ip"]}, fp=sys.stdout)

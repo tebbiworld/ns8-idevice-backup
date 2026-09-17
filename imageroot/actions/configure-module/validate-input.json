@@ -1,0 +1,17 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Configure idevice-backup",
+    "$id": "http://nethserver.org/json-schema/task/input/idevice-backup/configure-module",
+    "description": "Global options for the iOS backup module",
+    "examples": [ { "retention": 3 } ],
+    "type": "object",
+    "properties": {
+        "retention": {
+            "type": "integer",
+            "title": "Backups to keep per device",
+            "description": "How many backup snapshots to keep per device; older ones are pruned after a successful backup.",
+            "minimum": 1,
+            "maximum": 100
+        }
+    }
+}

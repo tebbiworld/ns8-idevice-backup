@@ -1,0 +1,9 @@
+# NS8 module — the UI dist/ is built by CI (see .github/workflows), not committed
+ui/dist/
+ui/node_modules/
+*.log
+.DS_Store
+
+# Python bytecode
+__pycache__/
+*.pyc

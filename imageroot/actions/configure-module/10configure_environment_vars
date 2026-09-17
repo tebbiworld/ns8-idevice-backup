@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import sys
+
+import agent
+
+data = json.load(sys.stdin)
+retention = int(data.get("retention") or 3)
+agent.set_env("RETENTION", str(retention))

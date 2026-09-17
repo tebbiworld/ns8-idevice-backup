@@ -1,0 +1,93 @@
+{
+    "common": {
+        "required": "Erforderlich",
+        "processing": "Wird verarbeitet..."
+    },
+    "status": {
+        "title": "Status",
+        "app_instance": "App-Instanz",
+        "services": "Dienst | Dienste",
+        "app_images": "App-Image | App-Images",
+        "app_volumes": "App-Volume | App-Volumes",
+        "installation_node": "Installationsknoten",
+        "node": "Knoten",
+        "name": "Name",
+        "size": "Größe",
+        "created": "Erstellt",
+        "mount": "Einhängepunkt",
+        "no_services": "Keine Dienste",
+        "no_images": "Keine Images",
+        "no_volumes": "Keine Volumes"
+    },
+    "settings": {
+        "title": "Einstellungen",
+        "configure_instance": "{instance} konfigurieren",
+        "save": "Speichern",
+        "show": "Passwort anzeigen",
+        "hide": "Passwort verbergen",
+        "engine_running": "Backup-Engine läuft",
+        "engine_stopped": "Backup-Engine läuft nicht",
+        "pairing_title": "Gerät koppeln (einmalig, am eigenen Rechner mit dem iPhone per USB)",
+        "pairing_step1": "jitterbugpair (Jitterbug) mit dem iPhone am USB ausführen. Es erzeugt eine Datei <UDID>.mobiledevicepairing.",
+        "pairing_step2": "In derselben USB-Sitzung WLAN-Lockdown einmalig aktivieren: 'pymobiledevice3 lockdown wifi-connections on' ausführen. Das iPhone muss einen Code gesetzt haben. Ohne diesen Schritt funktioniert das WLAN-Backup nicht.",
+        "pairing_step3": "Die .mobiledevicepairing-Datei unten hochladen und die WLAN-IP-Adresse des iPhones eintragen.",
+        "wifi_warn_title": "WLAN-Verbindungen müssen aktiviert sein",
+        "wifi_warn": "Die jitterbugpair-Datei allein aktiviert nur WLAN-Debugging, nicht das WLAN-Backup. Du musst zusätzlich einmalig per USB 'pymobiledevice3 lockdown wifi-connections on' ausführen, sonst schlägt die WLAN-Verbindung beim Backup fehl.",
+        "options_title": "Optionen",
+        "retention": "Backups je Gerät behalten",
+        "retention_helper": "Nach einem erfolgreichen Backup werden ältere Stände über dieser Anzahl entfernt (ältester zuerst).",
+        "add_title": "Gerät hinzufügen",
+        "device_name": "Gerätename",
+        "device_name_placeholder": "Thorstens iPhone",
+        "device_ip": "WLAN-IP-Adresse",
+        "device_ip_placeholder": "192.168.5.40",
+        "device_ip_helper": "Die Adresse des iPhones im WLAN. Der Server muss es auf TCP 62078 erreichen können.",
+        "enc_password": "Backup-Verschlüsselungspasswort (optional)",
+        "enc_password_helper": "Wenn gesetzt, wird die Backup-Verschlüsselung für dieses Gerät beim ersten Backup aktiviert. Bewahre das Passwort sicher auf — es ist für die Wiederherstellung nötig.",
+        "pairing_file": "Pairing-Datei",
+        "pairing_file_helper": "Die von jitterbugpair erzeugte Datei <UDID>.mobiledevicepairing.",
+        "upload": "Hochladen und Gerät hinzufügen",
+        "devices_title": "Geräte",
+        "no_devices": "Noch keine Geräte. Lade oben eine Pairing-Datei hoch.",
+        "col_name": "Gerät",
+        "col_ip": "IP",
+        "col_pairing": "Kopplung",
+        "col_encryption": "Verschlüsselt",
+        "col_last_backup": "Letztes Backup",
+        "col_count": "Backups",
+        "backup_now": "Jetzt sichern",
+        "delete": "Löschen"
+    },
+    "about": {
+        "title": "Über"
+    },
+    "task": {
+        "cannot_create_task": "Aufgabe {action} kann nicht erstellt werden"
+    },
+    "action": {
+        "get-status": "Status abrufen",
+        "get-configuration": "Konfiguration abrufen",
+        "configure-module": "Modul konfigurieren",
+        "get-module-info": "Modulinformationen abrufen",
+        "get-name": "Name abrufen",
+        "list-backup-repositories": "Backup-Repositories auflisten",
+        "list-backups": "Backups auflisten",
+        "list-installed-modules": "Installierte Module auflisten",
+        "upload-pairing": "Pairing-Datei hochladen",
+        "run-backup": "Backup ausführen",
+        "delete-device": "Gerät löschen",
+        "update-device": "Gerät aktualisieren"
+    },
+    "error": {
+        "error": "Fehler",
+        "generic_error": "Etwas ist schiefgelaufen",
+        "validation_error": "Validierungsfehler",
+        "network_error": "Netzwerkfehler",
+        "network_timeout": "Netzwerk-Timeout",
+        "401": "Ungültige Authentifizierung",
+        "403": "Vorgang nicht autorisiert",
+        "404": "Ressource nicht gefunden",
+        "cannot_retrieve_module_info": "Modulinformationen können nicht abgerufen werden",
+        "cannot_retrieve_installed_modules": "Installierte Module können nicht abgerufen werden"
+    }
+}

@@ -1,0 +1,93 @@
+{
+    "common": {
+        "required": "Required",
+        "processing": "Processing..."
+    },
+    "status": {
+        "title": "Status",
+        "app_instance": "App instance",
+        "services": "Service | Services",
+        "app_images": "App image | App images",
+        "app_volumes": "App volume | App volumes",
+        "installation_node": "Installation node",
+        "node": "Node",
+        "name": "Name",
+        "size": "Size",
+        "created": "Created",
+        "mount": "Mount",
+        "no_services": "No services",
+        "no_images": "No images",
+        "no_volumes": "No volumes"
+    },
+    "settings": {
+        "title": "Settings",
+        "configure_instance": "Configure {instance}",
+        "save": "Save",
+        "show": "Show password",
+        "hide": "Hide password",
+        "engine_running": "Backup engine is running",
+        "engine_stopped": "Backup engine is not running",
+        "pairing_title": "Pairing a device (once, on your own computer with the iPhone on USB)",
+        "pairing_step1": "Run jitterbugpair (Jitterbug) with the iPhone connected by USB. It produces a <UDID>.mobiledevicepairing file.",
+        "pairing_step2": "In the same USB session, enable WiFi lockdown once: run 'pymobiledevice3 lockdown wifi-connections on'. The iPhone must have a passcode set. Without this step WiFi backup does not work.",
+        "pairing_step3": "Upload the .mobiledevicepairing file below and enter the iPhone's WiFi IP address.",
+        "wifi_warn_title": "WiFi connections must be enabled",
+        "wifi_warn": "The jitterbugpair file alone only enables WiFi debugging, not WiFi backup. You must additionally run 'pymobiledevice3 lockdown wifi-connections on' over USB once, or backups over WiFi will fail to connect.",
+        "options_title": "Options",
+        "retention": "Backups to keep per device",
+        "retention_helper": "After a successful backup, snapshots beyond this number are removed (oldest first).",
+        "add_title": "Add a device",
+        "device_name": "Device name",
+        "device_name_placeholder": "Thorsten's iPhone",
+        "device_ip": "WiFi IP address",
+        "device_ip_placeholder": "192.168.5.40",
+        "device_ip_helper": "The iPhone's address on the WiFi. The server must be able to reach it on TCP 62078.",
+        "enc_password": "Backup encryption password (optional)",
+        "enc_password_helper": "If set, backup encryption is turned on for this device on the first backup. Keep this password safe — it is required to restore.",
+        "pairing_file": "Pairing file",
+        "pairing_file_helper": "The <UDID>.mobiledevicepairing file produced by jitterbugpair.",
+        "upload": "Upload and add device",
+        "devices_title": "Devices",
+        "no_devices": "No devices yet. Upload a pairing file above.",
+        "col_name": "Device",
+        "col_ip": "IP",
+        "col_pairing": "Pairing",
+        "col_encryption": "Encrypted",
+        "col_last_backup": "Last backup",
+        "col_count": "Backups",
+        "backup_now": "Back up now",
+        "delete": "Delete"
+    },
+    "about": {
+        "title": "About"
+    },
+    "task": {
+        "cannot_create_task": "Cannot create task {action}"
+    },
+    "action": {
+        "get-status": "Get status",
+        "get-configuration": "Get configuration",
+        "configure-module": "Configure module",
+        "get-module-info": "Get module info",
+        "get-name": "Get name",
+        "list-backup-repositories": "List backup repositories",
+        "list-backups": "List backups",
+        "list-installed-modules": "List installed modules",
+        "upload-pairing": "Upload pairing file",
+        "run-backup": "Run backup",
+        "delete-device": "Delete device",
+        "update-device": "Update device"
+    },
+    "error": {
+        "error": "Error",
+        "generic_error": "Something went wrong",
+        "validation_error": "Validation error",
+        "network_error": "Network error",
+        "network_timeout": "Network timeout",
+        "401": "Invalid authentication",
+        "403": "Operation not authorized",
+        "404": "Resource not found",
+        "cannot_retrieve_module_info": "Cannot retrieve module info",
+        "cannot_retrieve_installed_modules": "Cannot retrieve installed modules"
+    }
+}

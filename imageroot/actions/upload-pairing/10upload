@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Store an uploaded pairing file. The user creates it on their own computer
+# with jitterbugpair (device on USB) and uploads it here; the file is a plist
+# pairing record with an added top-level "UDID" key. It is written to
+# /var/lib/lockdown/<UDID>.plist inside the container, where libimobiledevice
+# expects pairing records, and the device is added to the registry.
+#
+# NOTE (verified): a jitterbugpair file only enables EnableWifiDebugging on the
+# device, NOT EnableWifiConnections. WiFi backup additionally requires
+# `pymobiledevice3 lockdown wifi-connections on` run once over USB on the
+# user's computer. The README/UI say so.
+
+import base64
+import json
+import plistlib
+import re
+import subprocess
+import sys
+import time
+
+import agent
+
+CONTAINER = "idevice-backup"
+UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
+
+
+def load_devices():
+    try:
+        with open("devices.json") as fp:
+            return json.load(fp)
+    except FileNotFoundError:
+        return {}
+
+
+def save_devices(devices):
+    with open("devices.json.tmp", "w") as fp:
+        json.dump(devices, fp, indent=2)
+    import os
+    os.replace("devices.json.tmp", "devices.json")
+
+
+data = json.load(sys.stdin)
+name = (data.get("name") or "").strip()
+ip = (data.get("ip") or "").strip()
+enc_pw = data.get("encryption_password")
+
+try:
+    raw = base64.b64decode(data["content"], validate=True)
+except Exception:
+    print(agent.SD_ERR + "the uploaded content is not valid base64", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    pl = plistlib.loads(raw)
+except Exception:
+    print(agent.SD_ERR + "the uploaded file is not a valid property list (expected a jitterbugpair pairing file)", file=sys.stderr)
+    sys.exit(2)
+
+udid = str(pl.get("UDID") or "").strip()
+if not udid:
+    print(agent.SD_ERR + "the pairing file has no UDID key; use a file produced by jitterbugpair", file=sys.stderr)
+    sys.exit(2)
+if not UDID_RE.match(udid):
+    print(agent.SD_ERR + f"the UDID '{udid}' has an unexpected format", file=sys.stderr)
+    sys.exit(2)
+for key in ("HostID", "SystemBUID", "HostCertificate", "DeviceCertificate"):
+    if key not in pl:
+        print(agent.SD_ERR + f"the pairing file is missing '{key}'; it is not a complete pairing record", file=sys.stderr)
+        sys.exit(2)
+
+proc = subprocess.run(["podman", "exec", "-i", CONTAINER, "sh", "-c",
+                       f"cat > /var/lib/lockdown/{udid}.plist"], input=raw, capture_output=True)
+if proc.returncode != 0:
+    err = proc.stderr.decode(errors="replace").strip()
+    print(agent.SD_ERR + "could not store the pairing file (is the module running?): " + err, file=sys.stderr)
+    sys.exit(1)
+
+devices = load_devices()
+d = devices.get(udid, {})
+d.update({
+    "udid": udid,
+    "name": name or d.get("name") or udid,
+    "ip": ip or d.get("ip", ""),
+    "paired_at": int(time.time()),
+    "has_wifi_mac": "WiFiMACAddress" in pl,
+    "has_escrow_bag": "EscrowBag" in pl,
+})
+d.setdefault("last_backup", 0)
+d.setdefault("last_status", "")
+d.setdefault("encryption", False)
+if enc_pw is not None and str(enc_pw).strip():
+    # stored to enable device-side backup encryption on the first backup and as
+    # a reference for restore; kept in module state (root-readable) only.
+    d["encryption_password"] = str(enc_pw)
+devices[udid] = d
+save_devices(devices)
+
+json.dump({"udid": udid, "name": d["name"], "ip": d["ip"]}, fp=sys.stdout)

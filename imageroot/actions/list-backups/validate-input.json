@@ -1,0 +1,8 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "list-backups input",
+    "$id": "http://nethserver.org/json-schema/task/input/idevice-backup/list-backups",
+    "type": "object",
+    "required": ["udid"],
+    "properties": { "udid": { "type": "string", "maxLength": 45 } }
+}
