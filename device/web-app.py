@@ -60,6 +60,84 @@ LDAP_DOMAIN = os.environ.get("LDAP_DOMAIN", "").strip()
 APP_TITLE = os.environ.get("APP_TITLE", "iOS Device Backup")
 ALLOW_RESTORE = os.environ.get("SELFSERVICE_RESTORE", "true").strip().lower() in ("1", "true", "yes", "on")
 
+# --------------------------------------------------------------------- i18n
+
+from flask import request as _rq  # noqa: E402
+
+T = {
+    "en": {
+        "invalid": "Invalid username or password.",
+        "username": "Username", "password": "Password", "login": "Log in",
+        "use_org": "Use your organization account.",
+        "hello": "Hello, {name}", "logout": "Log out", "my_devices": "My devices",
+        "h_device": "Device", "h_ip": "IP", "h_last": "Last backup",
+        "h_snap": "Available snapshots", "h_mode": "Mode", "h_actions": "Actions",
+        "save": "Save", "ok": "ok", "failed": "failed", "backing_up": "backing up…",
+        "no_backup": "no backup yet", "enc": "enc", "full": "Full", "incremental": "Incremental",
+        "restore": "Restore", "backup_now": "Back up now", "remove": "Remove",
+        "confirm_restore": "This ERASES the device and restores the selected backup. Continue?",
+        "confirm_remove": "Remove this device from the list?",
+        "no_devices": "No devices yet. Add one below.",
+        "add_device": "Add a device",
+        "add_intro": "Register your iPhone or iPad, then back it up over WiFi. You need a pairing file created once on your own computer — see the steps below.",
+        "f_name": "Name", "f_ip": "WiFi IP",
+        "f_encpw": "Backup encryption password (optional)",
+        "f_pairing": "Pairing file (<UDID>.plist or .mobiledevicepairing)",
+        "upload_add": "Upload and add",
+        "footer": "iOS Device Backup — self service",
+        "howto_title": "How to get the pairing file",
+        "howto_intro": "Do this once per device on your own computer, with the iPhone connected by USB:",
+        "howto_1": "Connect the iPhone by USB and confirm \u201cTrust this computer\u201d. iTunes or the Apple Devices app must be installed.",
+        "howto_2": "Your computer now holds a pairing file. On Windows it is %ProgramData%\\Apple\\Lockdown\\<UDID>.plist, on macOS /var/db/lockdown/<UDID>.plist. Upload that file above without renaming it.",
+        "howto_3": "Enable WiFi access once: in iTunes / Apple Devices tick \u201cSync with this iPhone over Wi-Fi\u201d and apply, or run pymobiledevice3 lockdown wifi-connections on. The iPhone must have a passcode.",
+        "howto_4": "Find the WiFi IP under Settings \u2192 Wi-Fi \u2192 the (i) next to the network, and enter it above.",
+    },
+    "de": {
+        "invalid": "Benutzername oder Passwort falsch.",
+        "username": "Benutzername", "password": "Passwort", "login": "Anmelden",
+        "use_org": "Melde dich mit deinem Organisationskonto an.",
+        "hello": "Hallo, {name}", "logout": "Abmelden", "my_devices": "Meine Ger\u00e4te",
+        "h_device": "Ger\u00e4t", "h_ip": "IP", "h_last": "Letztes Backup",
+        "h_snap": "Verf\u00fcgbare Snapshots", "h_mode": "Modus", "h_actions": "Aktionen",
+        "save": "Speichern", "ok": "ok", "failed": "fehlgeschlagen", "backing_up": "sichert\u2026",
+        "no_backup": "noch kein Backup", "enc": "versch.", "full": "Voll", "incremental": "Inkrementell",
+        "restore": "Wiederherstellen", "backup_now": "Jetzt sichern", "remove": "Entfernen",
+        "confirm_restore": "Dies L\u00d6SCHT das Ger\u00e4t und spielt das gew\u00e4hlte Backup zur\u00fcck. Fortfahren?",
+        "confirm_remove": "Dieses Ger\u00e4t aus der Liste entfernen?",
+        "no_devices": "Noch keine Ger\u00e4te. F\u00fcge unten eins hinzu.",
+        "add_device": "Ger\u00e4t hinzuf\u00fcgen",
+        "add_intro": "Registriere dein iPhone oder iPad und sichere es \u00fcber WLAN. Du brauchst eine Pairing-Datei, die du einmal am eigenen Rechner erstellst \u2013 siehe die Schritte unten.",
+        "f_name": "Name", "f_ip": "WLAN-IP",
+        "f_encpw": "Backup-Verschl\u00fcsselungspasswort (optional)",
+        "f_pairing": "Pairing-Datei (<UDID>.plist oder .mobiledevicepairing)",
+        "upload_add": "Hochladen und hinzuf\u00fcgen",
+        "footer": "iOS Device Backup \u2014 Self-Service",
+        "howto_title": "So kommst du an die Pairing-Datei",
+        "howto_intro": "Einmalig pro Ger\u00e4t am eigenen Rechner, das iPhone per USB angeschlossen:",
+        "howto_1": "iPhone per USB anschlie\u00dfen und \u201eDiesem Computer vertrauen\u201c best\u00e4tigen. iTunes oder die App \u201eApple-Ger\u00e4te\u201c muss installiert sein.",
+        "howto_2": "Der Rechner legt jetzt eine Pairing-Datei ab. Unter Windows %ProgramData%\\Apple\\Lockdown\\<UDID>.plist, unter macOS /var/db/lockdown/<UDID>.plist. Diese Datei oben hochladen, ohne sie umzubenennen.",
+        "howto_3": "WLAN-Zugriff einmal aktivieren: in iTunes / Apple-Ger\u00e4te den Haken \u201eMit diesem iPhone \u00fcber WLAN synchronisieren\u201c setzen, oder pymobiledevice3 lockdown wifi-connections on ausf\u00fchren. Das iPhone braucht einen Code.",
+        "howto_4": "Die WLAN-IP unter Einstellungen \u2192 WLAN \u2192 das (i) neben dem Netz ablesen und oben eintragen.",
+    },
+}
+
+
+def lang():
+    lg = session.get("lang")
+    if lg in T:
+        return lg
+    try:
+        return _rq.accept_languages.best_match(["de", "en"]) or "en"
+    except Exception:
+        return "en"
+
+
+def t(key, **kw):
+    d = T.get(lang(), T["en"])
+    v = d.get(key) or T["en"].get(key, key)
+    return v.format(**kw) if kw else v
+
+
 _running = {}          # udid -> True while a backup runs in this process
 _reg_lock = threading.Lock()
 
@@ -237,7 +315,7 @@ def esc(s):
     return html.escape(str(s or ""))
 
 
-PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+PAGE = """<!doctype html><html lang="{lang}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
 <title>{title}</title><style>
 :root{{color-scheme:light dark}}
@@ -263,29 +341,46 @@ col.c-dev{{width:14%}} col.c-ip{{width:15%}} col.c-last{{width:13%}} col.c-snap{
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.75rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}} .row>div.sm{{flex:0 1 13rem}}
 .err{{background:#fff1f1;border:1px solid #da1e28;color:#a2191f;padding:.6rem;border-radius:4px;margin-bottom:1rem}}
-.actbtns{{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}} form{{margin:0}}
+.actbtns{{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}}
+.howto{{margin:.5rem 0 0 1.2rem;padding:0}} .howto li{{margin-bottom:.5rem}} form{{margin:0}}
 @media (prefers-color-scheme:dark){{body{{background:#161616;color:#f4f4f4}}.card{{background:#262626;border-color:#393939}}input,select{{background:#161616;color:#f4f4f4;border-color:#6f6f6f}}}}
 </style></head><body><div class="wrap">{body}
-<p class="muted" style="text-align:center">iOS Device Backup — self service</p></div></body></html>"""
+<p class="muted" style="text-align:center">{footer}</p></div></body></html>"""
+
+
+def howto_html():
+    steps = "".join(f"<li>{esc(t(k))}</li>" for k in ("howto_1", "howto_2", "howto_3", "howto_4"))
+    return (f'<div class="card"><h2>{esc(t("howto_title"))}</h2>'
+            f'<p class="muted">{esc(t("howto_intro"))}</p><ol class="howto">{steps}</ol></div>')
+
+
+def lang_switch():
+    cur = lang()
+    parts = []
+    for code, label in (("de", "DE"), ("en", "EN")):
+        cls = "langsw on" if code == cur else "langsw"
+        parts.append(f'<a class="{cls}" href="{esc(url_for("set_lang", code=code))}">{label}</a>')
+    return '<div class="langbar">' + " ".join(parts) + "</div>"
 
 
 def render(body, refresh=False):
     r = '<meta http-equiv="refresh" content="6">' if refresh else ""
-    return PAGE.format(title=esc(APP_TITLE), body=body, refresh=r)
+    return PAGE.format(title=esc(APP_TITLE), body=body, refresh=r, lang=lang(), footer=esc(t("footer")))
 
 
 def login_view(err=False):
     login_url = esc(url_for("login"))
-    e = '<div class="err">Invalid username or password.</div>' if err else ""
+    e = f'<div class="err">{esc(t("invalid"))}</div>' if err else ""
     body = (
         '<div class="login">'
-        f'<div class="card"><h1>{esc(APP_TITLE)}</h1></div>'
-        f'<div class="card">{e}<form method="post" action="{login_url}">'
-        f'<input type="hidden" name="csrf" value="{esc(csrf_token())}">'
-        '<label for="u">Username</label><input id="u" name="username" autocomplete="username" autofocus>'
-        '<label for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password">'
-        '<div style="margin-top:1rem"><button type="submit">Log in</button></div></form>'
-        '<p class="muted">Use your organization account.</p></div></div>'
+        + lang_switch()
+        + f'<div class="card"><h1>{esc(APP_TITLE)}</h1></div>'
+        + f'<div class="card">{e}<form method="post" action="{login_url}">'
+        + f'<input type="hidden" name="csrf" value="{esc(csrf_token())}">'
+        + f'<label for="u">{esc(t("username"))}</label><input id="u" name="username" autocomplete="username" autofocus>'
+        + f'<label for="p">{esc(t("password"))}</label><input id="p" name="password" type="password" autocomplete="current-password">'
+        + f'<div style="margin-top:1rem"><button type="submit">{esc(t("login"))}</button></div></form>'
+        + f'<p class="muted">{esc(t("use_org"))}</p></div></div>'
     )
     return render(body)
 
@@ -307,6 +402,15 @@ def devices_view():
     devs = my_devices(uid)
     tok = esc(csrf_token())
     any_running = any(d["running"] for d in devs)
+    L = {k: esc(t(k)) for k in ("logout", "my_devices", "h_device", "h_ip", "h_last",
+        "h_snap", "h_mode", "h_actions", "save", "restore", "backup_now", "remove",
+        "no_devices", "add_device", "f_name", "f_ip", "f_encpw", "f_pairing",
+        "upload_add", "enc", "full", "incremental", "ok", "failed", "backing_up", "no_backup")}
+    hello = esc(t("hello", name=disp))
+    add_intro = esc(t("add_intro"))
+    cr_restore = t("confirm_restore").replace("\\", "\\\\").replace("'", "\\'")
+    cr_remove = t("confirm_remove").replace("\\", "\\\\").replace("'", "\\'")
+    howto = howto_html()
 
     rows = ""
     for d in devs:
@@ -320,9 +424,9 @@ def devices_view():
         if d["running"]:
             status = '<span class="muted">backing up…</span>'
         elif d.get("last_status") == "ok":
-            status = f'<span class="muted">{fmt_time(d.get("last_backup"))}</span> <span class="ok">ok</span>'
+            status = f'<span class="muted">{fmt_time(d.get("last_backup"))}</span> <span class="ok">{L["ok"]}</span>'
         elif d.get("last_status") == "failed":
-            status = f'<span class="bad">failed</span><div class="muted">{esc(d.get("last_error"))}</div>'
+            status = f'<span class="bad">{L["failed"]}</span><div class="muted">{esc(d.get("last_error"))}</div>'
         else:
             status = '<span class="muted">no backup yet</span>'
         snaps = d["snapshots"]
@@ -333,10 +437,10 @@ def devices_view():
             if ALLOW_RESTORE:
                 restore = (
                     f'<form method="post" action="{u_restore}" class="snaprow" onsubmit="return confirm('
-                    f"'This ERASES the device and restores the selected backup. Continue?');\">"
+                    f"'{cr_restore}');\">"
                     f'<input type="hidden" name="csrf" value="{tok}">'
                     f'<select class="snap-sel" name="snapshot">{opts}</select>'
-                    f'<button class="danger">Restore</button></form>'
+                    f'<button class="danger">{L["restore"]}</button></form>'
                 )
             snap_html = restore
         enc = "✓" if (d.get("encryption") or d.get("encryption_password_set") or d.get("encryption_password")) else "—"
@@ -345,46 +449,46 @@ def devices_view():
 <td><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div></td>
 <td><form method="post" action="{u_ip}" class="iprow">
     <input type="hidden" name="csrf" value="{tok}">
-    <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP">
-    <button class="sec" {disabled}>Save</button></form></td>
+    <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="{L['f_ip']}">
+    <button class="sec" {disabled}>{L['save']}</button></form></td>
 <td>{status}</td>
 <td>{snap_html or '<span class="muted">—</span>'}</td>
-<td><div class="moderow"><span class="muted">enc {enc}</span>
+<td><div class="moderow"><span class="muted">{L['enc']} {enc}</span>
   <form method="post" action="{u_mode}">
     <input type="hidden" name="csrf" value="{tok}">
     <select class="mode-sel" name="backup_mode" onchange="this.form.submit()">
-      <option value="full" {'selected' if (d.get('backup_mode') or 'full')=='full' else ''}>Full</option>
-      <option value="incremental" {'selected' if d.get('backup_mode')=='incremental' else ''}>Incremental</option>
+      <option value="full" {'selected' if (d.get('backup_mode') or 'full')=='full' else ''}>{L['full']}</option>
+      <option value="incremental" {'selected' if d.get('backup_mode')=='incremental' else ''}>{L['incremental']}</option>
     </select></form></div></td>
 <td class="act-cell"><div class="actbtns">
   <form method="post" action="{u_backup}"><input type="hidden" name="csrf" value="{tok}">
-    <button {disabled}>Back up now</button></form>
-  <form method="post" action="{u_delete}" onsubmit="return confirm('Remove this device from the list?');">
-    <input type="hidden" name="csrf" value="{tok}"><button class="danger" {disabled}>Remove</button></form>
+    <button {disabled}>{L['backup_now']}</button></form>
+  <form method="post" action="{u_delete}" onsubmit="return confirm('{cr_remove}');">
+    <input type="hidden" name="csrf" value="{tok}"><button class="danger" {disabled}>{L['remove']}</button></form>
 </div></td></tr>"""
 
     if not devs:
         rows = '<tr><td colspan="6" class="muted">No devices yet. Add one below.</td></tr>'
 
     body = f"""
-<div class="top"><h1>Hello, {disp}</h1>
+{lang_switch()}<div class="top"><h1>{hello}</h1>
   <form method="post" action="{logout_url}"><input type="hidden" name="csrf" value="{tok}">
-  <button class="sec">Log out</button></form></div>
-<div class="card"><h2>My devices</h2>
-<table><colgroup><col class="c-dev"><col class="c-ip"><col class="c-last"><col class="c-snap"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>Device</th><th>IP</th><th>Last backup</th><th>Available snapshots</th><th>Mode</th><th class="act-cell">Actions</th></tr></thead>
+  <button class="sec">{L['logout']}</button></form></div>
+<div class="card"><h2>{L['my_devices']}</h2>
+<table><colgroup><col class="c-dev"><col class="c-ip"><col class="c-last"><col class="c-snap"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>{L['h_device']}</th><th>{L['h_ip']}</th><th>{L['h_last']}</th><th>{L['h_snap']}</th><th>{L['h_mode']}</th><th class="act-cell">{L['h_actions']}</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
-<div class="card"><h2>Add a device</h2>
-<p class="muted">Create the pairing file on your computer with the iPhone on USB, enable WiFi lockdown once, then upload the file here. The device is registered to your account.</p>
+<div class="card"><h2>{L['add_device']}</h2>
+<p class="muted">{add_intro}</p>
 <form method="post" action="{add_url}" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{tok}">
   <div class="row">
-    <div class="sm"><label>Name</label><input name="name" placeholder="My iPhone"></div>
-    <div class="sm"><label>WiFi IP</label><input name="ip" placeholder="192.168.1.40"></div>
-    <div><label>Backup encryption password (optional)</label><input name="encryption_password" type="password" autocomplete="new-password"></div>
-    <div><label>Pairing file (&lt;UDID&gt;.plist or .mobiledevicepairing)</label><input type="file" name="pairing" accept=".plist,.mobiledevicepairing,application/xml,text/xml"></div>
+    <div class="sm"><label>{L['f_name']}</label><input name="name" placeholder="My iPhone"></div>
+    <div class="sm"><label>{L['f_ip']}</label><input name="ip" placeholder="192.168.1.40"></div>
+    <div><label>{L['f_encpw']}</label><input name="encryption_password" type="password" autocomplete="new-password"></div>
+    <div><label>{L['f_pairing']}</label><input type="file" name="pairing" accept=".plist,.mobiledevicepairing,application/xml,text/xml"></div>
   </div>
-  <div style="margin-top:1rem"><button type="submit">Upload and add</button></div>
-</form></div>"""
+  <div style="margin-top:1rem"><button type="submit">{L['upload_add']}</button></div>
+</form></div>{howto}"""
     return render(body, refresh=any_running)
 
 
@@ -423,6 +527,13 @@ def login():
     session["uid"] = uid
     session["display"] = display
     return redirect(url_for("index"))
+
+
+@app.get("/lang/<code>")
+def set_lang(code):
+    if code in T:
+        session["lang"] = code
+    return redirect(_rq.referrer or url_for("index"))
 
 
 @app.post("/logout")
