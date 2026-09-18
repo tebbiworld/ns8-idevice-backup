@@ -252,12 +252,13 @@ input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #
 .ip-in{{width:8rem}} .mode-sel{{width:auto;min-width:8rem}}
 .iprow button{{white-space:nowrap}}
 .iprow{{display:flex;gap:.5rem;align-items:center}}
-.snaprow{{display:flex;gap:.5rem;align-items:center;margin-top:.3rem;flex-wrap:nowrap}} .snap-sel{{width:11rem;min-width:0;max-width:100%}}
+.snaprow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap}}
+.moderow{{display:flex;gap:.5rem;align-items:center}} .snap-sel{{width:13rem;min-width:0;max-width:100%}}
 .act-cell{{text-align:right}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:20%}} col.c-ip{{width:15%}} col.c-last{{width:11%}} col.c-snap{{width:20%}} col.c-mode{{width:11%}} col.c-act{{width:23%}}
+col.c-dev{{width:20%}} col.c-ip{{width:13%}} col.c-last{{width:11%}} col.c-snap{{width:24%}} col.c-mode{{width:10%}} col.c-act{{width:22%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
@@ -337,7 +338,7 @@ def devices_view():
                     f'<select class="snap-sel" name="snapshot">{opts}</select>'
                     f'<button class="danger">Restore</button></form>'
                 )
-            snap_html = f'<div class="muted">{len(snaps)} snapshot(s)</div>{restore}'
+            snap_html = restore
         enc = "✓" if (d.get("encryption") or d.get("encryption_password_set") or d.get("encryption_password")) else "—"
         disabled = "disabled" if d["running"] else ""
         rows += f"""<tr>
@@ -348,13 +349,13 @@ def devices_view():
     <button class="sec" {disabled}>Save</button></form></td>
 <td>{status}</td>
 <td>{snap_html or '<span class="muted">—</span>'}</td>
-<td>enc {enc}
-  <form method="post" action="{u_mode}" style="margin-top:.3rem">
+<td><div class="moderow"><span class="muted">enc {enc}</span>
+  <form method="post" action="{u_mode}">
     <input type="hidden" name="csrf" value="{tok}">
     <select class="mode-sel" name="backup_mode" onchange="this.form.submit()">
       <option value="full" {'selected' if (d.get('backup_mode') or 'full')=='full' else ''}>Full</option>
       <option value="incremental" {'selected' if d.get('backup_mode')=='incremental' else ''}>Incremental</option>
-    </select></form></td>
+    </select></form></div></td>
 <td class="act-cell"><div class="actbtns">
   <form method="post" action="{u_backup}"><input type="hidden" name="csrf" value="{tok}">
     <button {disabled}>Back up now</button></form>
