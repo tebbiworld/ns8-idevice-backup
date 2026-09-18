@@ -254,7 +254,7 @@ input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:36%}} col.c-status{{width:15%}} col.c-mode{{width:14%}} col.c-act{{width:35%}}
+col.c-dev{{width:26%}} col.c-last{{width:12%}} col.c-snap{{width:22%}} col.c-mode{{width:12%}} col.c-act{{width:28%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
@@ -316,7 +316,7 @@ def devices_view():
         if d["running"]:
             status = '<span class="muted">backing up…</span>'
         elif d.get("last_status") == "ok":
-            status = f'<span class="ok">ok</span> <span class="muted">{fmt_time(d.get("last_backup"))}</span>'
+            status = f'<span class="muted">{fmt_time(d.get("last_backup"))}</span> <span class="ok">ok</span>'
         elif d.get("last_status") == "failed":
             status = f'<span class="bad">failed</span><div class="muted">{esc(d.get("last_error"))}</div>'
         else:
@@ -343,7 +343,8 @@ def devices_view():
     <input type="hidden" name="csrf" value="{tok}">
     <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP">
     <button class="sec" {disabled}>Save IP</button></form></td>
-<td>{status}<div style="margin-top:.3rem">{snap_html}</div></td>
+<td>{status}</td>
+<td>{snap_html or '<span class="muted">—</span>'}</td>
 <td>enc {enc}
   <form method="post" action="{u_mode}" style="margin-top:.3rem">
     <input type="hidden" name="csrf" value="{tok}">
@@ -359,14 +360,14 @@ def devices_view():
 </div></td></tr>"""
 
     if not devs:
-        rows = '<tr><td colspan="4" class="muted">No devices yet. Add one below.</td></tr>'
+        rows = '<tr><td colspan="5" class="muted">No devices yet. Add one below.</td></tr>'
 
     body = f"""
 <div class="top"><h1>Hello, {disp}</h1>
   <form method="post" action="{logout_url}"><input type="hidden" name="csrf" value="{tok}">
   <button class="sec">Log out</button></form></div>
 <div class="card"><h2>My devices</h2>
-<table><colgroup><col class="c-dev"><col class="c-status"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>Device</th><th>Last backup</th><th>Mode</th><th>Actions</th></tr></thead>
+<table><colgroup><col class="c-dev"><col class="c-last"><col class="c-snap"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>Device</th><th>Last backup</th><th>Available snapshots</th><th>Mode</th><th>Actions</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <div class="card"><h2>Add a device</h2>
 <p class="muted">Create the pairing file on your computer with the iPhone on USB, enable WiFi lockdown once, then upload the file here. The device is registered to your account.</p>
