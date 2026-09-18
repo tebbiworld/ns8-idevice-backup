@@ -131,7 +131,7 @@ async def cmd_backup(args):
                 with open(progress_file, "w") as fp:
                     fp.write(f"{p}\n")
 
-        await svc.backup(full=True, backup_directory=args.dir, progress_callback=on_progress)
+        await svc.backup(full=not args.incremental, backup_directory=args.dir, progress_callback=on_progress)
     hb.cancel()
     print(json.dumps({"ok": True, "dir": args.dir, "encryption_enabled": enabled_encryption}))
 
@@ -157,10 +157,12 @@ async def cmd_restore(args):
             with open(progress_file, "w") as fp:
                 fp.write(f"{p}\n")
 
+    source = getattr(args, "source", "") or args.udid
     async with Mobilebackup2Service(ld) as svc:
-        # copy=True: keep the on-disk backup; settings/reboot at defaults so the
-        # device comes back up configured. password is required iff encrypted.
-        await svc.restore(backup_directory=args.dir, password=pw,
+        # copy=True keeps the on-disk backup; source selects which device's backup
+        # inside backup_directory to write (same-device: source == udid; cross-device:
+        # source is the ORIGINAL device's udid). password required iff encrypted.
+        await svc.restore(backup_directory=args.dir, source=source, password=pw,
                           copy=True, reboot=True, progress_callback=on_progress)
     hb.cancel()
     print(json.dumps({"ok": True, "dir": args.dir, "restored": True}))
@@ -177,10 +179,12 @@ def main():
     b.add_argument("--ip", required=True)
     b.add_argument("--dir", required=True)
     b.add_argument("--set-password", action="store_true")
+    b.add_argument("--incremental", action="store_true", help="incremental update of the backup dir (full=False)")
     r = sub.add_parser("restore")
     r.add_argument("--udid", required=True)
     r.add_argument("--ip", required=True)
     r.add_argument("--dir", required=True)
+    r.add_argument("--source", default="", help="UDID of the backup folder inside --dir (cross-device restore); default = --udid")
     args = ap.parse_args()
     try:
         dispatch = {"ping": cmd_ping, "backup": cmd_backup, "restore": cmd_restore}

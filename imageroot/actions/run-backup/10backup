@@ -53,8 +53,15 @@ if not ip:
     sys.exit(2)
 
 retention = int(os.environ.get("RETENTION", "3"))
-ts = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-dest = f"/data/backups/{udid}/{ts}"
+mode = (dev.get("backup_mode") or "full").strip().lower()
+incremental = mode == "incremental"
+if incremental:
+    # one persistent backup per device that mobilebackup2 updates in place
+    ts = "incremental"
+    dest = f"/data/backups/{udid}/incremental"
+else:
+    ts = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+    dest = f"/data/backups/{udid}/{ts}"
 
 enc_pw = dev.get("encryption_password") or ""
 set_encryption = bool(enc_pw) and not dev.get("encryption", False)
@@ -66,6 +73,8 @@ if set_encryption:
 cmd += [CONTAINER, "idevice-tool", "backup", "--udid", udid, "--ip", ip, "--dir", dest]
 if set_encryption:
     cmd += ["--set-password"]
+if incremental:
+    cmd += ["--incremental"]
 
 print(agent.SD_INFO + f"starting backup of {dev.get('name', udid)} at {ip} into {dest}", file=sys.stderr)
 proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -90,8 +99,10 @@ if proc.returncode != 0 or not result.get("ok"):
     elif etype == "ConnectionTerminatedError":
         err = ("the device closed the connection (ConnectionTerminatedError). Unlock the iPhone, keep it "
                "awake and enter the passcode when it asks for it, then start the backup again.")
-    # do not leave an empty or partial snapshot behind: it would count towards retention
-    subprocess.run(["podman", "exec", CONTAINER, "rm", "-rf", dest], capture_output=True)
+    # a fresh full snapshot that failed is partial: remove it so it does not count
+    # towards retention. never delete the persistent incremental backup on failure.
+    if not incremental:
+        subprocess.run(["podman", "exec", CONTAINER, "rm", "-rf", dest], capture_output=True)
     dev["last_status"] = "failed"
     dev["last_error"] = err[:500]
     devices[udid] = dev
@@ -100,9 +111,12 @@ if proc.returncode != 0 or not result.get("ok"):
     sys.exit(1)
 
 # success: prune old snapshots beyond retention (oldest first)
-prune = subprocess.run(["podman", "exec", CONTAINER, "sh", "-c",
-                        f"ls -1d /data/backups/{udid}/*/ 2>/dev/null | sort | head -n -{retention} | xargs -r rm -rf"],
-                       capture_output=True, text=True)
+if not incremental:
+    # prune old timestamped snapshots (keep the incremental dir if any)
+    subprocess.run(["podman", "exec", CONTAINER, "sh", "-c",
+                    f"ls -1d /data/backups/{udid}/*/ 2>/dev/null | grep -v '/incremental/$' | sort "
+                    f"| head -n -{retention} | xargs -r rm -rf"],
+                   capture_output=True, text=True)
 
 if result.get("encryption_enabled"):
     dev["encryption"] = True

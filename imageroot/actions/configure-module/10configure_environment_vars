@@ -5,11 +5,25 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+# Global module options: retention (snapshots kept per device in full mode) and
+# whether the device backups themselves go into the NS8 backup. The latter is
+# applied by regenerating state-include.conf from the flag.
+
 import json
+import os
+import subprocess
 import sys
 
 import agent
 
 data = json.load(sys.stdin)
 retention = int(data.get("retention") or 3)
+include = bool(data.get("include_backups", False))
+
 agent.set_env("RETENTION", str(retention))
+agent.set_env("IDEVICE_INCLUDE_BACKUPS", "true" if include else "false")
+
+# Rewrite state-include.conf so the NS8 backup carries (or omits) volumes/idevice-data.
+env = dict(os.environ)
+env["IDEVICE_INCLUDE_BACKUPS"] = "true" if include else "false"
+subprocess.run(["regen-state-include"], check=True, env=env)

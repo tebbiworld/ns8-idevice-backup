@@ -3,12 +3,37 @@
     "title": "restore-backup input",
     "$id": "http://nethserver.org/json-schema/task/input/idevice-backup/restore-backup",
     "description": "Restore a stored snapshot back onto the device (destructive)",
-    "examples": [ { "udid": "00008130-000200A11E91001C", "snapshot": "2026-09-18_07-16-00" } ],
+    "examples": [
+        {
+            "udid": "00008130-000200A11E91001C",
+            "snapshot": "2026-09-18_07-16-00"
+        }
+    ],
     "type": "object",
-    "required": ["udid", "snapshot"],
+    "required": [
+        "udid",
+        "snapshot"
+    ],
     "properties": {
-        "udid": { "type": "string", "title": "Device UDID", "maxLength": 45 },
-        "snapshot": { "type": "string", "title": "Snapshot name", "maxLength": 64 },
-        "encryption_password": { "type": "string", "title": "Backup password override (optional)", "maxLength": 200 }
+        "udid": {
+            "type": "string",
+            "title": "Device UDID",
+            "maxLength": 45
+        },
+        "snapshot": {
+            "type": "string",
+            "title": "Snapshot name",
+            "maxLength": 64
+        },
+        "encryption_password": {
+            "type": "string",
+            "title": "Backup password override (optional)",
+            "maxLength": 200
+        },
+        "target_udid": {
+            "type": "string",
+            "title": "Restore onto this device (default: the snapshot's own device)",
+            "maxLength": 45
+        }
     }
 }

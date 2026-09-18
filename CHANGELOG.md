@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0 — 2026-09-18
+
+- **Restore from the UI.** Each device has a *Restore* button that lists its
+  snapshots and restores one back onto the same device or, for a lost/broken
+  phone, onto another paired device (cross-device). Destructive: it overwrites
+  and reboots the target; the dialog warns and requires an explicit choice.
+- **Incremental or full backups per device.** A per-device *Mode* selector:
+  *Full* keeps timestamped snapshots with retention (default), *Incremental*
+  keeps one backup that iOS updates in place at every run.
+- **Include device backups in the NS8 backup (toggle).** Off by default; on, the
+  ``idevice-data`` volume is added to the module's NS8 backup (regenerates
+  ``state-include.conf``). The UI notes it can roughly double the backup size.
+- restore-backup gained ``target_udid`` and the engine tool a ``--source`` /
+  ``--incremental`` option.
+
 ## 1.0.0 — 2026-09-18
 
 - First release. WiFi backup of iPhones/iPads over the network with

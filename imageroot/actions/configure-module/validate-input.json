@@ -3,7 +3,12 @@
     "title": "Configure idevice-backup",
     "$id": "http://nethserver.org/json-schema/task/input/idevice-backup/configure-module",
     "description": "Global options for the iOS backup module",
-    "examples": [ { "retention": 3 } ],
+    "examples": [
+        {
+            "retention": 3,
+            "include_backups": false
+        }
+    ],
     "type": "object",
     "properties": {
         "retention": {
@@ -12,6 +17,11 @@
             "description": "How many backup snapshots to keep per device; older ones are pruned after a successful backup.",
             "minimum": 1,
             "maximum": 100
+        },
+        "include_backups": {
+            "type": "boolean",
+            "title": "Include device backups in the NS8 backup",
+            "description": "Add the (potentially large) device backups to this module's NS8 backup. Off by default; only pairing records and the registry are carried."
         }
     }
 }

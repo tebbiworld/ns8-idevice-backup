@@ -102,6 +102,7 @@ d.update({
 d.setdefault("last_backup", 0)
 d.setdefault("last_status", "")
 d.setdefault("encryption", False)
+d.setdefault("backup_mode", "full")
 if enc_pw is not None and str(enc_pw).strip():
     # stored to enable device-side backup encryption on the first backup and as
     # a reference for restore; kept in module state (root-readable) only.

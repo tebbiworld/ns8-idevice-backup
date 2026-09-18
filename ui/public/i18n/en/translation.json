@@ -56,7 +56,27 @@
         "col_last_backup": "Last backup",
         "col_count": "Backups",
         "backup_now": "Back up now",
-        "delete": "Delete"
+        "delete": "Delete",
+        "include_backups": "Include device backups in the NS8 backup",
+        "include_backups_helper": "Off by default. The device backups can be several GB each and would roughly double this module's NS8 backup size; with it off only the pairing records and the device list are carried, so protect the backups separately.",
+        "off": "Off",
+        "on": "On",
+        "col_mode": "Mode",
+        "mode_full": "Full",
+        "mode_incremental": "Incremental",
+        "restore": "Restore",
+        "restore_title": "Restore a backup of {name}",
+        "restore_warn_title": "This overwrites a device and reboots it",
+        "restore_warn": "Restoring erases the target device and writes the backup onto it. Turn Find My iPhone off on the device first, keep it unlocked, on power and on WiFi, and confirm the passcode prompt. An encrypted backup uses the stored password.",
+        "restore_pick_snapshot": "Choose a snapshot",
+        "restore_no_snapshots": "No snapshots for this device yet.",
+        "restore_target": "Restore onto",
+        "restore_same": "The same device ({name})",
+        "restore_other": "Another paired device",
+        "restore_choose_device": "Choose a target device…",
+        "restore_confirm_hint": "The restore starts as soon as you confirm. It cannot be undone.",
+        "restore_now": "Restore now",
+        "cancel": "Cancel"
     },
     "about": {
         "title": "About"
@@ -76,7 +96,8 @@
         "upload-pairing": "Upload pairing file",
         "run-backup": "Run backup",
         "delete-device": "Delete device",
-        "update-device": "Update device"
+        "update-device": "Update device",
+        "restore-backup": "Restore backup"
     },
     "error": {
         "error": "Error",

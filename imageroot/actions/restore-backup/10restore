@@ -32,9 +32,10 @@ def load_devices():
 
 
 data = json.load(sys.stdin)
-udid = str(data["udid"]).strip()
+udid = str(data["udid"]).strip()            # the snapshot's original device (source)
 snapshot = str(data.get("snapshot") or "").strip()
-if not UDID_RE.match(udid):
+target_udid = str(data.get("target_udid") or udid).strip()  # device to restore ONTO
+if not UDID_RE.match(udid) or not UDID_RE.match(target_udid):
     print(agent.SD_ERR + "invalid UDID", file=sys.stderr)
     sys.exit(2)
 if not SNAP_RE.match(snapshot):
@@ -42,14 +43,19 @@ if not SNAP_RE.match(snapshot):
     sys.exit(2)
 
 devices = load_devices()
-dev = devices.get(udid)
+dev = devices.get(udid)          # source device (owns the backup + its password)
+target = devices.get(target_udid)  # device we connect to and write onto
 if not dev:
-    print(agent.SD_ERR + "unknown device", file=sys.stderr)
+    print(agent.SD_ERR + "unknown source device", file=sys.stderr)
     sys.exit(2)
-ip = (dev.get("ip") or "").strip()
+if not target:
+    print(agent.SD_ERR + "unknown target device (pair it first)", file=sys.stderr)
+    sys.exit(2)
+ip = (target.get("ip") or "").strip()
 if not ip:
-    print(agent.SD_ERR + "set the device WiFi IP address first", file=sys.stderr)
+    print(agent.SD_ERR + "set the target device WiFi IP address first", file=sys.stderr)
     sys.exit(2)
+cross_device = target_udid != udid
 
 dest = f"/data/backups/{udid}/{snapshot}"
 # the snapshot must exist and hold the <udid> backup folder
@@ -64,9 +70,15 @@ enc_pw = (data.get("encryption_password") or dev.get("encryption_password") or "
 cmd = ["podman", "exec"]
 if enc_pw:
     cmd += ["-e", "IDEVICE_RESTORE_PASSWORD=" + enc_pw]
-cmd += [CONTAINER, "idevice-tool", "restore", "--udid", udid, "--ip", ip, "--dir", dest]
+cmd += [CONTAINER, "idevice-tool", "restore", "--udid", target_udid, "--ip", ip,
+        "--dir", dest, "--source", udid]
 
-print(agent.SD_INFO + f"restoring {dev.get('name', udid)} from {snapshot} (the device is overwritten and reboots)", file=sys.stderr)
+tgt_name = target.get("name", target_udid)
+if cross_device:
+    print(agent.SD_INFO + f"restoring the backup of {dev.get('name', udid)} ({snapshot}) ONTO {tgt_name} "
+          f"(that device is overwritten and reboots)", file=sys.stderr)
+else:
+    print(agent.SD_INFO + f"restoring {tgt_name} from {snapshot} (the device is overwritten and reboots)", file=sys.stderr)
 proc = subprocess.run(cmd, capture_output=True, text=True)
 out = (proc.stdout or "").strip().splitlines()
 result = {}
@@ -91,4 +103,4 @@ if proc.returncode != 0 or not result.get("ok"):
     print(agent.SD_ERR + "restore failed: " + err, file=sys.stderr)
     sys.exit(1)
 
-json.dump({"udid": udid, "snapshot": snapshot, "status": "ok"}, fp=sys.stdout)
+json.dump({"udid": udid, "target_udid": target_udid, "snapshot": snapshot, "status": "ok"}, fp=sys.stdout)

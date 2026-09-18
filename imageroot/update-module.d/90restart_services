@@ -3,7 +3,10 @@
 # Copyright (C) 2026 tebbi
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
+# The image re-extraction resets etc/state-include.conf to the packaged default,
+# so re-apply the IDEVICE_INCLUDE_BACKUPS choice, then restart onto the new image.
 set -e
 exec 1>&2
+regen-state-include || true
 systemctl --user daemon-reload
 systemctl --user restart idevice-backup.service

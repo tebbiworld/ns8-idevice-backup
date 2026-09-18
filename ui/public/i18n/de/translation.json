@@ -56,7 +56,27 @@
         "col_last_backup": "Letztes Backup",
         "col_count": "Backups",
         "backup_now": "Jetzt sichern",
-        "delete": "Löschen"
+        "delete": "Löschen",
+        "include_backups": "Gerätebackups in die NS8-Sicherung aufnehmen",
+        "include_backups_helper": "Standardmäßig aus. Die Gerätebackups können mehrere GB je Gerät groß sein und würden die NS8-Sicherung dieses Moduls etwa verdoppeln; ausgeschaltet werden nur Pairing-Dateien und die Geräteliste mitgesichert, sichere die Backups also separat.",
+        "off": "Aus",
+        "on": "Ein",
+        "col_mode": "Modus",
+        "mode_full": "Voll",
+        "mode_incremental": "Inkrementell",
+        "restore": "Wiederherstellen",
+        "restore_title": "Backup von {name} wiederherstellen",
+        "restore_warn_title": "Dies überschreibt ein Gerät und startet es neu",
+        "restore_warn": "Die Wiederherstellung löscht das Zielgerät und schreibt das Backup darauf. Schalte am Gerät zuerst „Wo ist?“ aus, halte es entsperrt, am Strom und im WLAN, und bestätige die Code-Abfrage. Ein verschlüsseltes Backup nutzt das gespeicherte Passwort.",
+        "restore_pick_snapshot": "Snapshot wählen",
+        "restore_no_snapshots": "Für dieses Gerät gibt es noch keine Snapshots.",
+        "restore_target": "Wiederherstellen auf",
+        "restore_same": "Dasselbe Gerät ({name})",
+        "restore_other": "Ein anderes gekoppeltes Gerät",
+        "restore_choose_device": "Zielgerät wählen…",
+        "restore_confirm_hint": "Die Wiederherstellung startet, sobald du bestätigst. Sie lässt sich nicht rückgängig machen.",
+        "restore_now": "Jetzt wiederherstellen",
+        "cancel": "Abbrechen"
     },
     "about": {
         "title": "Über"
@@ -76,7 +96,8 @@
         "upload-pairing": "Pairing-Datei hochladen",
         "run-backup": "Backup ausführen",
         "delete-device": "Gerät löschen",
-        "update-device": "Gerät aktualisieren"
+        "update-device": "Gerät aktualisieren",
+        "restore-backup": "Backup wiederherstellen"
     },
     "error": {
         "error": "Fehler",

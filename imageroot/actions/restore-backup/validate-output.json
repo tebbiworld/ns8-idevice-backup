@@ -5,8 +5,17 @@
     "description": "Restore result",
     "type": "object",
     "properties": {
-        "udid": { "type": "string" },
-        "snapshot": { "type": "string" },
-        "status": { "type": "string" }
+        "udid": {
+            "type": "string"
+        },
+        "snapshot": {
+            "type": "string"
+        },
+        "status": {
+            "type": "string"
+        },
+        "target_udid": {
+            "type": "string"
+        }
     }
 }

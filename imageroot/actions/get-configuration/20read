@@ -61,10 +61,14 @@ for udid, d in sorted(registry.items(), key=lambda kv: kv[1].get("name", "")):
         "last_status": d.get("last_status", ""),
         "backup_count": counts.get(udid, 0),
         "encryption": bool(d.get("encryption", False)),
+        "encryption_password_set": bool(d.get("encryption_password")),
+        "backup_mode": d.get("backup_mode", "full"),
+        "last_error": d.get("last_error", ""),
     })
 
 config = {
     "retention": int(env.get("RETENTION", "3")),
+    "include_backups": env.get("IDEVICE_INCLUDE_BACKUPS", "false").strip().lower() in ("1", "true", "yes", "on"),
     "container_running": running,
     "devices": devices,
 }

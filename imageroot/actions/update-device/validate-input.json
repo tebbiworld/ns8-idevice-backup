@@ -3,10 +3,34 @@
     "title": "update-device input",
     "$id": "http://nethserver.org/json-schema/task/input/idevice-backup/update-device",
     "type": "object",
-    "required": ["udid"],
+    "required": [
+        "udid"
+    ],
     "properties": {
-        "udid": { "type": "string", "maxLength": 45 },
-        "name": { "type": "string", "maxLength": 100 },
-        "ip": { "type": "string", "maxLength": 253 }
+        "udid": {
+            "type": "string",
+            "maxLength": 45
+        },
+        "name": {
+            "type": "string",
+            "maxLength": 100
+        },
+        "ip": {
+            "type": "string",
+            "maxLength": 253
+        },
+        "backup_mode": {
+            "type": "string",
+            "title": "Backup mode",
+            "enum": [
+                "full",
+                "incremental"
+            ]
+        },
+        "encryption_password": {
+            "type": "string",
+            "title": "Backup encryption password",
+            "maxLength": 200
+        }
     }
 }
