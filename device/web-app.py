@@ -348,14 +348,14 @@ label{{display:block;font-size:.8rem;color:#525252;margin:.6rem 0 .2rem}}
 input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #8d8d8d;border-radius:4px;font-size:1rem;background:#fff;color:#161616}}
 .ip-in{{width:8rem}} .mode-sel{{width:auto;min-width:8rem}}
 .iprow button{{white-space:nowrap}}
-.iprow{{display:flex;gap:.5rem;align-items:center}}
+.iprow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap}}
 .snaprow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap}}
 .moderow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap;white-space:nowrap}} .snap-sel{{width:14.5rem;min-width:0;max-width:100%}}
 .act-cell{{text-align:right}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:14%}} col.c-ip{{width:14%}} col.c-last{{width:12%}} col.c-snap{{width:25%}} col.c-mode{{width:12%}} col.c-act{{width:23%}}
+col.c-dev{{width:14%}} col.c-ip{{width:17%}} col.c-last{{width:13%}} col.c-snap{{width:25%}} col.c-mode{{width:12%}} col.c-act{{width:19%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.75rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}} .row>div.sm{{flex:0 1 13rem}}
