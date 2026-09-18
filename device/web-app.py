@@ -331,11 +331,11 @@ def devices_view():
             restore = ""
             if ALLOW_RESTORE:
                 restore = (
-                    f'<form method="post" action="{u_restore}" onsubmit="return confirm('
+                    f'<form method="post" action="{u_restore}" class="snaprow" onsubmit="return confirm('
                     f"'This ERASES the device and restores the selected backup. Continue?');\">"
                     f'<input type="hidden" name="csrf" value="{tok}">'
-                    f'<select name="snapshot">{opts}</select>'
-                    f'<button class="danger" style="margin-top:.4rem">Restore</button></form>'
+                    f'<select class="snap-sel" name="snapshot">{opts}</select>'
+                    f'<button class="danger">Restore</button></form>'
                 )
             snap_html = f'<div class="muted">{len(snaps)} snapshot(s)</div>{restore}'
         enc = "✓" if (d.get("encryption") or d.get("encryption_password_set") or d.get("encryption_password")) else "—"
