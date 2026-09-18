@@ -21,6 +21,7 @@ import plistlib
 import re
 import secrets
 import ssl
+import sys
 import subprocess
 import threading
 import time
@@ -140,6 +141,21 @@ def t(key, **kw):
 
 _running = {}          # udid -> True while a backup runs in this process
 _reg_lock = threading.Lock()
+_audit_lock = threading.Lock()
+AUDIT_FILE = os.path.join(STATE_DIR, "audit.log")
+
+
+def audit(action, uid="", **fields):
+    """Append an audit line to the container log and a persistent file."""
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    kv = " ".join(f"{k}={v}" for k, v in fields.items() if v not in ("", None))
+    line = f"{ts} user={uid or '-'} action={action} {kv}".rstrip()
+    print("AUDIT " + line, file=sys.stderr, flush=True)
+    try:
+        with _audit_lock, open(AUDIT_FILE, "a") as fp:
+            fp.write(line + "\n")
+    except Exception:
+        pass
 
 
 # --------------------------------------------------------------------------- LDAP
@@ -236,7 +252,7 @@ def list_snapshots(udid):
 
 # ------------------------------------------------------------------------- backup
 
-def _do_backup(udid, ip, incremental, enc_pw, set_pw):
+def _do_backup(udid, ip, incremental, enc_pw, set_pw, uid=""):
     dest = f"{BACKUP_ROOT}/{udid}/" + ("incremental" if incremental else time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime()))
     cmd = ["idevice-tool", "backup", "--udid", udid, "--ip", ip, "--dir", dest]
     if incremental:
@@ -278,10 +294,11 @@ def _do_backup(udid, ip, incremental, enc_pw, set_pw):
                 d["last_error"] = (err or "backup failed")[:300]
             devices[udid] = d
             save_devices(devices)
+    audit("backup_done", uid=uid, udid=udid, result=("ok" if ok else "failed"))
     _running.pop(udid, None)
 
 
-def start_backup(udid, dev):
+def start_backup(udid, dev, uid=""):
     if udid in _running:
         return
     ip = (dev.get("ip") or "").strip()
@@ -291,7 +308,7 @@ def start_backup(udid, dev):
     enc_pw = dev.get("encryption_password") or ""
     set_pw = bool(enc_pw) and not dev.get("encryption", False)
     _running[udid] = True
-    threading.Thread(target=_do_backup, args=(udid, ip, incremental, enc_pw, set_pw), daemon=True).start()
+    threading.Thread(target=_do_backup, args=(udid, ip, incremental, enc_pw, set_pw, uid), daemon=True).start()
 
 
 # --------------------------------------------------------------------------- CSRF
@@ -516,10 +533,13 @@ def login_form():
 @app.post("/login")
 def login():
     check_csrf()
-    res = ldap_authenticate((request.form.get("username") or "").strip(), request.form.get("password") or "")
+    attempted = (request.form.get("username") or "").strip()
+    res = ldap_authenticate(attempted, request.form.get("password") or "")
     if not res:
+        audit("login", uid=attempted, result="fail", src=request.remote_addr)
         return redirect(url_for("login_form", e=1))
     uid, display = res
+    audit("login", uid=uid, result="ok", src=request.remote_addr)
     keep = session.get("csrf")
     session.clear()
     session["csrf"] = keep
@@ -539,6 +559,7 @@ def set_lang(code):
 @app.post("/logout")
 def logout():
     check_csrf()
+    audit("logout", uid=session.get("uid", ""), src=request.remote_addr)
     session.clear()
     return redirect(url_for("login_form"))
 
@@ -602,6 +623,7 @@ def device_add():
             d["encryption_password"] = pw
         devices[udid] = d
         save_devices(devices)
+    audit("device_add", uid=uid, udid=udid, src=request.remote_addr)
     return redirect(url_for("index"))
 
 
@@ -613,6 +635,7 @@ def device_ip(udid):
         devices = load_devices()
         devices[udid]["ip"] = (request.form.get("ip") or "").strip()
         save_devices(devices)
+    audit("device_ip", uid=session.get("uid", ""), udid=udid, src=request.remote_addr)
     return redirect(url_for("index"))
 
 
@@ -625,6 +648,7 @@ def device_mode(udid):
         devices = load_devices()
         devices[udid]["backup_mode"] = "incremental" if m == "incremental" else "full"
         save_devices(devices)
+    audit("device_mode", uid=session.get("uid", ""), udid=udid, mode=m, src=request.remote_addr)
     return redirect(url_for("index"))
 
 
@@ -632,7 +656,8 @@ def device_mode(udid):
 def device_backup(udid):
     check_csrf()
     dev = _require_owned(udid)
-    start_backup(udid, dev)
+    start_backup(udid, dev, session.get("uid", ""))
+    audit("backup_start", uid=session.get("uid", ""), udid=udid, mode=dev.get("backup_mode", "full"), src=request.remote_addr)
     return redirect(url_for("index"))
 
 
@@ -650,15 +675,20 @@ def device_restore(udid):
         return redirect(url_for("index"))
     dest = f"{BACKUP_ROOT}/{udid}/{snapshot}"
     enc_pw = dev.get("encryption_password") or ""
+    ruid = session.get("uid", "")
+    audit("restore_start", uid=ruid, udid=udid, snapshot=snapshot, src=request.remote_addr)
 
     def _do():
         env = dict(os.environ)
         if enc_pw:
             env["IDEVICE_RESTORE_PASSWORD"] = enc_pw
         cmd = ["idevice-tool", "restore", "--udid", udid, "--ip", ip, "--dir", dest, "--source", udid]
+        ok = False
         try:
-            subprocess.run(cmd, capture_output=True, text=True, env=env)
+            proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+            ok = proc.returncode == 0 and '"ok": true' in (proc.stdout or "")
         finally:
+            audit("restore_done", uid=ruid, udid=udid, snapshot=snapshot, result=("ok" if ok else "failed"))
             _running.pop(udid, None)
 
     _running[udid] = True
@@ -674,6 +704,7 @@ def device_delete(udid):
         devices = load_devices()
         devices.pop(udid, None)
         save_devices(devices)
+    audit("device_delete", uid=session.get("uid", ""), udid=udid, src=request.remote_addr)
     try:
         os.remove(os.path.join(LOCKDOWN_DIR, f"{udid}.plist"))
     except OSError:

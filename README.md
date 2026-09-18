@@ -79,6 +79,31 @@ if it is lost, the encrypted backup cannot be restored.
   `volumes/idevice-data` to `imageroot/etc/state-include.conf` if you want the
   NS8 backup to carry the device backups too.
 
+## Self-service portal (users manage their own devices)
+
+Besides the cluster-admin view, the module can run a **self-service web app** so
+end users manage the backups of their **own** devices without the admin entering
+every device by hand.
+
+- Configure a **self-service host** (FQDN) and optionally a **path** (e.g.
+  `/idevice`, served like `https://host/idevice/`, similar to cluster-admin),
+  with Let's Encrypt.
+- Users log in with **AD/LDAP** (a direct bind with the admin-entered service
+  account; use `ldaps://…:636`). Give the LDAP URL, base DN, bind DN + password,
+  the login attribute (default `sAMAccountName`) and, optionally, a group DN.
+- Each device has an **owner**; a user only sees and acts on their own devices.
+  The admin sees all devices and assigns owners in cluster-admin. A device paired
+  through the portal is owned by the logged-in user.
+- Users can add a device (pairing upload), set the WiFi IP, pick full or
+  incremental, **back up** and **restore** (restore can be limited to admins with
+  the *Allow users to restore* switch). The portal is bilingual (DE/EN) and shows
+  a short guide for creating the pairing file.
+- **Audit log:** every login and device action is recorded per user in the
+  container log and in `state/audit.log` (which the NS8 backup keeps).
+
+The portal needs one TCP port and the `traefik@node:routeadm` authorization,
+granted when the module is installed.
+
 ## Restore to a device
 
 Restoring writes a stored snapshot back **onto** the device and reboots it, so it

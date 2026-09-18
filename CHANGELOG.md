@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.0 — 2026-09-18
+
+- **Self-service portal.** A second web surface (own FQDN, or a path such as
+  `/idevice` on a host) where end users log in with their AD/LDAP account and
+  manage the backups of **their own** devices only: add a device (pairing
+  upload), set the WiFi IP, choose full/incremental, back up, restore, remove.
+  Devices are owned per user; the admin still sees and assigns everything in
+  cluster-admin. Bilingual (DE/EN, auto from the browser, with a switch) and a
+  built-in "how to get the pairing file" guide.
+- **Per-device owner/domain** in the registry and an Owner column in
+  cluster-admin.
+- **LDAP login** is a direct bind with admin-entered credentials (ldaps
+  recommended; the container reaches the directory through
+  host.containers.internal under pasta when it is node-local).
+- **Restore self-service** is on by default and can be limited to admins.
+- **Audit log**: logins, add/backup/restore/delete and settings changes are
+  written per user to the container log and to `state/audit.log` (kept in the
+  NS8 backup).
+- The module now publishes one TCP port for the portal and requests the
+  `traefik@node:routeadm` authorization (granted at install).
+
 ## 1.1.0 — 2026-09-18
 
 - **Restore from the UI.** Each device has a *Restore* button that lists its
