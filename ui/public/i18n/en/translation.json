@@ -76,7 +76,9 @@
         "restore_choose_device": "Choose a target device…",
         "restore_confirm_hint": "The restore starts as soon as you confirm. It cannot be undone.",
         "restore_now": "Restore now",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "col_owner": "Owner",
+        "owner_placeholder": "user or user@domain"
     },
     "about": {
         "title": "About"

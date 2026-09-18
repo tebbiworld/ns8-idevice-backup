@@ -50,6 +50,12 @@
                     },
                     "last_error": {
                         "type": "string"
+                    },
+                    "owner": {
+                        "type": "string"
+                    },
+                    "domain": {
+                        "type": "string"
                     }
                 }
             }

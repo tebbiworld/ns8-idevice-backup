@@ -53,6 +53,8 @@ data = json.load(sys.stdin)
 name = (data.get("name") or "").strip()
 ip = (data.get("ip") or "").strip()
 enc_pw = data.get("encryption_password")
+owner = (data.get("owner") or "").strip()
+domain = (data.get("domain") or "").strip()
 
 try:
     raw = base64.b64decode(data["content"], validate=True)
@@ -103,6 +105,10 @@ d.setdefault("last_backup", 0)
 d.setdefault("last_status", "")
 d.setdefault("encryption", False)
 d.setdefault("backup_mode", "full")
+if owner:
+    d["owner"] = owner
+    if domain:
+        d["domain"] = domain
 if enc_pw is not None and str(enc_pw).strip():
     # stored to enable device-side backup encryption on the first backup and as
     # a reference for restore; kept in module state (root-readable) only.

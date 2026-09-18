@@ -64,6 +64,8 @@ for udid, d in sorted(registry.items(), key=lambda kv: kv[1].get("name", "")):
         "encryption_password_set": bool(d.get("encryption_password")),
         "backup_mode": d.get("backup_mode", "full"),
         "last_error": d.get("last_error", ""),
+        "owner": d.get("owner", ""),
+        "domain": d.get("domain", ""),
     })
 
 config = {

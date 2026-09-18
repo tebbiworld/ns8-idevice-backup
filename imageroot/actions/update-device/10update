@@ -38,6 +38,19 @@ if "ip" in data:
 if "backup_mode" in data:
     m = (data["backup_mode"] or "full").strip().lower()
     devices[udid]["backup_mode"] = "incremental" if m == "incremental" else "full"
+if "owner" in data:
+    owner = (data["owner"] or "").strip()
+    if owner:
+        devices[udid]["owner"] = owner
+    else:
+        devices[udid].pop("owner", None)
+        devices[udid].pop("domain", None)
+if "domain" in data:
+    dom = (data["domain"] or "").strip()
+    if dom:
+        devices[udid]["domain"] = dom
+    else:
+        devices[udid].pop("domain", None)
 if "encryption_password" in data:
     pw = str(data["encryption_password"] or "")
     if pw:
@@ -48,4 +61,5 @@ with open("devices.json.tmp", "w") as fp:
     json.dump(devices, fp, indent=2)
 os.replace("devices.json.tmp", "devices.json")
 json.dump({"udid": udid, "name": devices[udid]["name"], "ip": devices[udid]["ip"],
-           "backup_mode": devices[udid].get("backup_mode", "full")}, fp=sys.stdout)
+           "backup_mode": devices[udid].get("backup_mode", "full"),
+           "owner": devices[udid].get("owner", "")}, fp=sys.stdout)

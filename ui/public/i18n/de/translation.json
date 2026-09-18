@@ -76,7 +76,9 @@
         "restore_choose_device": "Zielgerät wählen…",
         "restore_confirm_hint": "Die Wiederherstellung startet, sobald du bestätigst. Sie lässt sich nicht rückgängig machen.",
         "restore_now": "Jetzt wiederherstellen",
-        "cancel": "Abbrechen"
+        "cancel": "Abbrechen",
+        "col_owner": "Besitzer",
+        "owner_placeholder": "Nutzer oder Nutzer@Domäne"
     },
     "about": {
         "title": "Über"

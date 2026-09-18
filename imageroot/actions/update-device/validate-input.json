@@ -31,6 +31,16 @@
             "type": "string",
             "title": "Backup encryption password",
             "maxLength": 200
+        },
+        "owner": {
+            "type": "string",
+            "title": "Owner (LDAP user id or user@domain)",
+            "maxLength": 255
+        },
+        "domain": {
+            "type": "string",
+            "title": "Owner user domain",
+            "maxLength": 255
         }
     }
 }

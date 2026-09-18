@@ -87,6 +87,7 @@
                 <th>{{ $t("settings.col_pairing") }}</th>
                 <th>{{ $t("settings.col_encryption") }}</th>
                 <th>{{ $t("settings.col_mode") }}</th>
+                <th>{{ $t("settings.col_owner") }}</th>
                 <th>{{ $t("settings.col_last_backup") }}</th>
                 <th>{{ $t("settings.col_count") }}</th>
                 <th></th>
@@ -103,6 +104,9 @@
                     <option value="full">{{ $t("settings.mode_full") }}</option>
                     <option value="incremental">{{ $t("settings.mode_incremental") }}</option>
                   </select>
+                </td>
+                <td>
+                  <input class="owner-input" type="text" :value="d.owner || ''" :placeholder="$t('settings.owner_placeholder')" :disabled="loading.owner === d.udid" @change="updateOwner(d.udid, $event.target.value)" />
                 </td>
                 <td>
                   <span v-if="d.last_backup">{{ formatTime(d.last_backup) }}</span>
@@ -188,7 +192,7 @@ export default {
         show: false, sourceUdid: "", sourceName: "", snapshots: [], loadingSnapshots: false,
         snapshot: "", targetChoice: "same", targetUdid: "", loading: false, error: "",
       },
-      loading: { getConfiguration: false, configureModule: false, uploadPairing: false, backup: "", mode: "" },
+      loading: { getConfiguration: false, configureModule: false, uploadPairing: false, backup: "", mode: "", owner: "" },
       error: {
         getConfiguration: "", configureModule: "", uploadPairing: "", runBackup: "", upload_ip: "",
       },
@@ -307,6 +311,19 @@ export default {
       }));
       if (res[0]) { this.loading.mode = ""; this.getConfiguration(); }
     },
+    async updateOwner(udid, owner) {
+      this.loading.owner = udid;
+      const taskAction = "update-device";
+      const eventId = this.getUuid();
+      this.core.$root.$once(`${taskAction}-aborted-${eventId}`, () => { this.loading.owner = ""; this.getConfiguration(); });
+      this.core.$root.$once(`${taskAction}-completed-${eventId}`, () => { this.loading.owner = ""; this.getConfiguration(); });
+      const res = await to(this.createModuleTaskForApp(this.instanceName, {
+        action: taskAction,
+        data: { udid, owner: (owner || "").trim() },
+        extra: { title: this.$t("action.update-device"), description: this.$t("common.processing"), eventId, isNotificationHidden: true },
+      }));
+      if (res[0]) { this.loading.owner = ""; this.getConfiguration(); }
+    },
     async uploadPairing() {
       this.error.uploadPairing = "";
       if (!this.upload.content) return;
@@ -411,6 +428,7 @@ export default {
 .devices .actions { white-space: nowrap; }
 .devices .actions .bx--btn { margin-right: $spacing-03; }
 .mode-select { padding: 2px 6px; min-height: 2rem; }
+.owner-input { padding: 2px 6px; min-height: 2rem; width: 12rem; max-width: 100%; }
 .restore-confirm { margin-top: $spacing-05; font-size: 0.875rem; color: #6f6f6f; }
 .ok { color: #24a148; font-weight: 600; }
 .bad { color: #da1e28; font-weight: 600; }
