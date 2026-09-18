@@ -267,16 +267,16 @@ def _do_backup(udid, ip, incremental, enc_pw, set_pw, uid=""):
     ok = False
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
-        ok = proc.returncode == 0 and b'"ok": true' in proc.stdout.encode()
-        err = ""
-        if not ok:
-            for line in reversed((proc.stdout or "").splitlines()):
-                if line.strip().startswith("{"):
-                    try:
-                        err = json.loads(line).get("error") or json.loads(line).get("type") or ""
-                    except Exception:
-                        err = ""
-                    break
+        result = {}
+        for line in reversed((proc.stdout or "").splitlines()):
+            if line.strip().startswith("{"):
+                try:
+                    result = json.loads(line)
+                except Exception:
+                    result = {}
+                break
+        ok = proc.returncode == 0 and result.get("ok") is True
+        err = "" if ok else (result.get("error") or result.get("type") or "")
     except Exception as e:
         err = str(e)
     with _reg_lock:
@@ -287,8 +287,8 @@ def _do_backup(udid, ip, incremental, enc_pw, set_pw, uid=""):
                 d["last_backup"] = int(time.time())
                 d["last_status"] = "ok"
                 d["last_error"] = ""
-                if set_pw:
-                    d["encryption"] = True
+                if "device_encrypted" in result:
+                    d["encryption"] = bool(result["device_encrypted"])
             else:
                 if not incremental:
                     subprocess.run(["rm", "-rf", dest], capture_output=True)
@@ -308,7 +308,7 @@ def start_backup(udid, dev, uid=""):
         return
     incremental = (dev.get("backup_mode") or "full") == "incremental"
     enc_pw = dev.get("encryption_password") or ""
-    set_pw = bool(enc_pw) and not dev.get("encryption", False)
+    set_pw = bool(enc_pw)  # the engine only enables it if the device is not already encrypted
     _running[udid] = True
     threading.Thread(target=_do_backup, args=(udid, ip, incremental, enc_pw, set_pw, uid), daemon=True).start()
 

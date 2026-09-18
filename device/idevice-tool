@@ -110,14 +110,23 @@ async def cmd_backup(args):
     from pymobiledevice3.services.mobilebackup2 import Mobilebackup2Service
     ld, hb = await connect(args.udid, args.ip)
     os.makedirs(args.dir, exist_ok=True)
+    # The DEVICE is the source of truth for whether backups are encrypted, not
+    # the module registry (which could be stale). Only enable encryption when the
+    # device does NOT already have it on; enabling it again with an empty old
+    # password fails with MBErrorDomain/207 on an already-encrypted device.
+    try:
+        already_encrypted = bool(await _value(ld, domain="com.apple.mobile.backup", key="WillEncrypt"))
+    except Exception:
+        already_encrypted = False
     enabled_encryption = False
     async with Mobilebackup2Service(ld) as svc:
-        if args.set_password:
+        if args.set_password and not already_encrypted:
             pw = os.environ.get("IDEVICE_SET_PASSWORD", "")
             if pw:
                 # old='' turns encryption ON with the new password (device-side)
                 await svc.change_password(backup_directory=args.dir, old="", new=pw)
                 enabled_encryption = True
+                already_encrypted = True
         progress_file = os.path.join(os.path.dirname(args.dir.rstrip("/")), ".progress")
         last = [-1]
 
@@ -133,7 +142,7 @@ async def cmd_backup(args):
 
         await svc.backup(full=not args.incremental, backup_directory=args.dir, progress_callback=on_progress)
     hb.cancel()
-    print(json.dumps({"ok": True, "dir": args.dir, "encryption_enabled": enabled_encryption}))
+    print(json.dumps({"ok": True, "dir": args.dir, "encryption_enabled": enabled_encryption, "device_encrypted": already_encrypted}))
 
 
 async def cmd_restore(args):

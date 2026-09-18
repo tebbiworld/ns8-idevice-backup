@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.2 — 2026-09-18
+
+- **Encryption-password fix.** Backing up an already-encrypted device no longer
+  fails with "Invalid password (MBErrorDomain/207)". The engine now queries the
+  device's real encryption state and sets a backup password only when the device
+  is not yet encrypted, instead of trying to re-apply it. The stored encryption
+  flag self-heals from the device on every backup.
+- **Admin UI for the self-service portal.** Cluster-admin gains a *Self-service
+  portal* section (portal host name or path, Let's Encrypt, the self-restore
+  switch) and a *Directory login (AD/LDAP)* form (URL, base DN, bind DN and
+  password, login attribute, owner domain, optional group). These settings
+  previously had to be entered from the backend only.
+- Saving the global options no longer clears the portal/LDAP configuration:
+  configure-module now preserves any field that is not submitted.
+
 ## 1.2.1 — 2026-09-18
 
 - Self-service how-to now tells users to give the iPhone a fixed IP and turn

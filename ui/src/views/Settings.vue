@@ -53,6 +53,55 @@
       </cv-column>
     </cv-row>
 
+    <!-- Self-service portal + directory login -->
+    <cv-row>
+      <cv-column>
+        <cv-tile light>
+          <h4 class="section-first">{{ $t("settings.ss_title") }}</h4>
+          <p class="bx--form__helper-text">{{ $t("settings.ss_help") }}</p>
+          <NsInlineNotification
+            v-if="ss.host && !loading.getConfiguration"
+            :kind="web_running ? 'success' : 'info'"
+            :title="web_running ? $t('settings.ss_running') : $t('settings.ss_stopped')"
+            :description="selfserviceUrl ? $t('settings.ss_url_label') + ': ' + selfserviceUrl : ''"
+            :showCloseButton="false"
+            class="info-tile"
+          />
+          <cv-form @submit.prevent="saveSelfService">
+            <cv-text-input :label="$t('settings.ss_host')" v-model.trim="ss.host" :placeholder="$t('settings.ss_host_placeholder')" :helper-text="$t('settings.ss_host_helper')" :disabled="ssBusy" class="field"></cv-text-input>
+            <cv-text-input :label="$t('settings.ss_path')" v-model.trim="ss.path" :placeholder="$t('settings.ss_path_placeholder')" :helper-text="$t('settings.ss_path_helper')" :disabled="ssBusy" class="field"></cv-text-input>
+            <cv-toggle value="letsEncrypt" :label="$t('settings.ss_lets_encrypt')" v-model="ss.lets_encrypt" :disabled="ssBusy" class="field">
+              <template slot="text-left">{{ $t("settings.off") }}</template>
+              <template slot="text-right">{{ $t("settings.on") }}</template>
+            </cv-toggle>
+            <cv-toggle value="ssRestore" :label="$t('settings.ss_restore')" v-model="ss.restore" :disabled="ssBusy" class="field">
+              <template slot="text-left">{{ $t("settings.off") }}</template>
+              <template slot="text-right">{{ $t("settings.on") }}</template>
+            </cv-toggle>
+            <div class="bx--form__helper-text">{{ $t("settings.ss_restore_helper") }}</div>
+
+            <h5 class="section">{{ $t("settings.ldap_title") }}</h5>
+            <cv-toggle value="ldapEnabled" :label="$t('settings.ldap_enabled')" v-model="ss.ldap_enabled" :disabled="ssBusy" class="field">
+              <template slot="text-left">{{ $t("settings.off") }}</template>
+              <template slot="text-right">{{ $t("settings.on") }}</template>
+            </cv-toggle>
+            <div class="bx--form__helper-text">{{ $t("settings.ldap_enabled_helper") }}</div>
+            <template v-if="ss.ldap_enabled">
+              <cv-text-input :label="$t('settings.ldap_url')" v-model.trim="ss.ldap_url" :placeholder="$t('settings.ldap_url_placeholder')" :helper-text="$t('settings.ldap_url_helper')" :disabled="ssBusy" class="field"></cv-text-input>
+              <cv-text-input :label="$t('settings.ldap_base_dn')" v-model.trim="ss.ldap_base_dn" :placeholder="$t('settings.ldap_base_dn_placeholder')" :disabled="ssBusy" class="field"></cv-text-input>
+              <cv-text-input :label="$t('settings.ldap_bind_dn')" v-model.trim="ss.ldap_bind_dn" :placeholder="$t('settings.ldap_bind_dn_placeholder')" :disabled="ssBusy" class="field"></cv-text-input>
+              <cv-text-input type="password" :label="$t('settings.ldap_bind_password')" v-model="ss.ldap_bind_password" :helper-text="ss.ldap_bind_password_set ? $t('settings.ldap_bind_password_set') : $t('settings.ldap_bind_password_helper')" :password-hide-label="$t('settings.hide')" :password-show-label="$t('settings.show')" :disabled="ssBusy" class="field"></cv-text-input>
+              <cv-text-input :label="$t('settings.ldap_user_attribute')" v-model.trim="ss.ldap_user_attribute" :helper-text="$t('settings.ldap_user_attribute_helper')" :disabled="ssBusy" class="field"></cv-text-input>
+              <cv-text-input :label="$t('settings.ldap_domain')" v-model.trim="ss.ldap_domain" :placeholder="$t('settings.ldap_domain_placeholder')" :helper-text="$t('settings.ldap_domain_helper')" :disabled="ssBusy" class="field"></cv-text-input>
+              <cv-text-input :label="$t('settings.ldap_group')" v-model.trim="ss.ldap_group" :placeholder="$t('settings.ldap_group_placeholder')" :disabled="ssBusy" class="field"></cv-text-input>
+            </template>
+            <NsInlineNotification v-if="error.selfService" kind="error" :title="$t('action.configure-module')" :description="error.selfService" :showCloseButton="false" class="info-tile" />
+            <NsButton kind="primary" :icon="Save20" :loading="loading.selfService" :disabled="ssBusy" class="field">{{ $t("settings.ss_save") }}</NsButton>
+          </cv-form>
+        </cv-tile>
+      </cv-column>
+    </cv-row>
+
     <!-- Add / update a device -->
     <cv-row>
       <cv-column>
@@ -186,15 +235,23 @@ export default {
       retention: 3,
       include_backups: false,
       container_running: false,
+      web_running: false,
+      selfserviceUrl: "",
+      ss: {
+        host: "", path: "", lets_encrypt: false, restore: true,
+        ldap_enabled: false, ldap_url: "", ldap_base_dn: "", ldap_bind_dn: "",
+        ldap_bind_password: "", ldap_bind_password_set: false,
+        ldap_user_attribute: "sAMAccountName", ldap_group: "", ldap_domain: "",
+      },
       devices: [],
       upload: { name: "", ip: "", encryption_password: "", content: "", filename: "" },
       restore: {
         show: false, sourceUdid: "", sourceName: "", snapshots: [], loadingSnapshots: false,
         snapshot: "", targetChoice: "same", targetUdid: "", loading: false, error: "",
       },
-      loading: { getConfiguration: false, configureModule: false, uploadPairing: false, backup: "", mode: "", owner: "" },
+      loading: { getConfiguration: false, configureModule: false, selfService: false, uploadPairing: false, backup: "", mode: "", owner: "" },
       error: {
-        getConfiguration: "", configureModule: "", uploadPairing: "", runBackup: "", upload_ip: "",
+        getConfiguration: "", configureModule: "", selfService: "", uploadPairing: "", runBackup: "", upload_ip: "",
       },
     };
   },
@@ -205,6 +262,9 @@ export default {
     },
     uploadBusy() {
       return this.loading.uploadPairing;
+    },
+    ssBusy() {
+      return this.loading.getConfiguration || this.loading.selfService;
     },
     otherDevices() {
       return this.devices.filter((d) => d.udid !== this.restore.sourceUdid);
@@ -283,7 +343,56 @@ export default {
       this.retention = c.retention || 3;
       this.include_backups = !!c.include_backups;
       this.container_running = !!c.container_running;
+      this.web_running = !!c.web_running;
+      this.selfserviceUrl = c.selfservice_url || "";
+      this.ss = {
+        host: c.selfservice_host || "",
+        path: c.selfservice_path || "",
+        lets_encrypt: !!c.lets_encrypt,
+        restore: c.selfservice_restore !== false,
+        ldap_enabled: !!c.ldap_enabled,
+        ldap_url: c.ldap_url || "",
+        ldap_base_dn: c.ldap_base_dn || "",
+        ldap_bind_dn: c.ldap_bind_dn || "",
+        ldap_bind_password: "",
+        ldap_bind_password_set: !!c.ldap_bind_password_set,
+        ldap_user_attribute: c.ldap_user_attribute || "sAMAccountName",
+        ldap_group: c.ldap_group || "",
+        ldap_domain: c.ldap_domain || "",
+      };
       this.devices = c.devices || [];
+    },
+    async saveSelfService() {
+      this.loading.selfService = true;
+      this.error.selfService = "";
+      const taskAction = "configure-module";
+      const eventId = this.getUuid();
+      const data = {
+        retention: Number(this.retention),
+        include_backups: this.include_backups,
+        selfservice_host: this.ss.host,
+        selfservice_path: this.ss.path,
+        lets_encrypt: this.ss.lets_encrypt,
+        selfservice_restore: this.ss.restore,
+        ldap_enabled: this.ss.ldap_enabled,
+        ldap_url: this.ss.ldap_url,
+        ldap_base_dn: this.ss.ldap_base_dn,
+        ldap_bind_dn: this.ss.ldap_bind_dn,
+        ldap_user_attribute: this.ss.ldap_user_attribute,
+        ldap_group: this.ss.ldap_group,
+        ldap_domain: this.ss.ldap_domain,
+      };
+      // Only send the bind password when the admin typed a new one (empty keeps the stored one).
+      if (this.ss.ldap_bind_password) data.ldap_bind_password = this.ss.ldap_bind_password;
+      this.core.$root.$once(`${taskAction}-aborted-${eventId}`, () => { this.loading.selfService = false; this.error.selfService = this.$t("error.generic_error"); });
+      this.core.$root.$once(`${taskAction}-validation-failed-${eventId}`, (ctx, res) => { this.loading.selfService = false; this.error.selfService = this.$t("error.generic_error"); console.error("validation failed", res); });
+      this.core.$root.$once(`${taskAction}-completed-${eventId}`, () => { this.loading.selfService = false; this.getConfiguration(); });
+      const res = await to(this.createModuleTaskForApp(this.instanceName, {
+        action: taskAction,
+        data,
+        extra: { title: this.$t("settings.configure_instance", { instance: this.instanceName }), description: this.$t("common.processing"), eventId },
+      }));
+      if (res[0]) { this.error.selfService = this.getErrorMessage(res[0]); this.loading.selfService = false; }
     },
     async saveOptions() {
       this.loading.configureModule = true;

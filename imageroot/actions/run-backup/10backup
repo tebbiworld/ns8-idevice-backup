@@ -64,7 +64,7 @@ else:
     dest = f"/data/backups/{udid}/{ts}"
 
 enc_pw = dev.get("encryption_password") or ""
-set_encryption = bool(enc_pw) and not dev.get("encryption", False)
+set_encryption = bool(enc_pw)  # the engine skips it if the device is already encrypted
 
 cmd = ["podman", "exec"]
 env = os.environ.copy()
@@ -118,7 +118,9 @@ if not incremental:
                     f"| head -n -{retention} | xargs -r rm -rf"],
                    capture_output=True, text=True)
 
-if result.get("encryption_enabled"):
+if "device_encrypted" in result:
+    dev["encryption"] = bool(result["device_encrypted"])
+elif result.get("encryption_enabled"):
     dev["encryption"] = True
 dev["last_backup"] = now
 dev["last_status"] = "ok"
