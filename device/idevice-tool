@@ -34,29 +34,79 @@ def load_pair_record(udid):
         return plistlib.load(fp)
 
 
-async def connect(udid, ip):
+async def _lockdown(udid, ip):
     from pymobiledevice3.lockdown import create_using_tcp
     record = load_pair_record(udid)
     return await create_using_tcp(hostname=ip, autopair=False, pair_record=record)
 
 
+async def _heartbeat(udid, ip, ready):
+    # Over WiFi the device drops every service connection right after the TLS
+    # handshake unless the host keeps a com.apple.mobile.heartbeat session
+    # open and answers each "Marco" with "Polo" (Apple's usbmuxd and netmuxd do
+    # the same). Verified on iOS 26.6: without it afc, installation_proxy and
+    # mobilebackup2 all end in ConnectionTerminatedError. It uses its own
+    # lockdown connection so it never interleaves with the main one.
+    while True:
+        try:
+            ld = await _lockdown(udid, ip)
+            hb = await ld.start_lockdown_service("com.apple.mobile.heartbeat")
+            while True:
+                await hb.recv_plist()
+                await hb.send_plist({"Command": "Polo"})
+                ready.set()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await asyncio.sleep(2)
+
+
+async def connect(udid, ip):
+    """Return (lockdown client, heartbeat task); cancel the task when done."""
+    ld = await _lockdown(udid, ip)
+    ready = asyncio.Event()
+    task = asyncio.create_task(_heartbeat(udid, ip, ready))
+    try:
+        await asyncio.wait_for(ready.wait(), 30)
+    except asyncio.TimeoutError:
+        task.cancel()
+        raise RuntimeError("the device did not answer the heartbeat service within 30 s")
+    return ld, task
+
+
+async def _value(ld, **kw):
+    # get_value is a coroutine in pymobiledevice3 >= 11, a plain call before
+    v = ld.get_value(**kw)
+    if asyncio.iscoroutine(v):
+        v = await v
+    return v
+
+
 async def cmd_ping(args):
-    ld = await connect(args.udid, args.ip)
+    ld, hb = await connect(args.udid, args.ip)
     info = {"ok": True, "udid": args.udid}
     try:
-        info["product_version"] = getattr(ld, "product_version", "") or ""
+        info["product_version"] = str(getattr(ld, "product_version", "") or "")
     except Exception:
         info["product_version"] = ""
-    try:
-        info["device_name"] = ld.get_value(key="DeviceName")
-    except Exception:
-        info["device_name"] = getattr(ld, "display_name", "") or ""
+    for field, kw in (
+        ("device_name", {"key": "DeviceName"}),
+        ("product_type", {"key": "ProductType"}),
+        ("wifi_connections", {"domain": "com.apple.mobile.wireless_lockdown", "key": "EnableWifiConnections"}),
+        ("backup_encrypted", {"domain": "com.apple.mobile.backup", "key": "WillEncrypt"}),
+    ):
+        try:
+            v = await _value(ld, **kw)
+            info[field] = v if isinstance(v, (str, bool, int, float, type(None))) else str(v)
+        except Exception as e:
+            info[field] = None
+    hb.cancel()
     print(json.dumps(info))
 
 
 async def cmd_backup(args):
     from pymobiledevice3.services.mobilebackup2 import Mobilebackup2Service
-    ld = await connect(args.udid, args.ip)
+    ld, hb = await connect(args.udid, args.ip)
     os.makedirs(args.dir, exist_ok=True)
     enabled_encryption = False
     async with Mobilebackup2Service(ld) as svc:
@@ -66,7 +116,21 @@ async def cmd_backup(args):
                 # old='' turns encryption ON with the new password (device-side)
                 await svc.change_password(backup_directory=args.dir, old="", new=pw)
                 enabled_encryption = True
-        await svc.backup(full=True, backup_directory=args.dir)
+        progress_file = os.path.join(os.path.dirname(args.dir.rstrip("/")), ".progress")
+        last = [-1]
+
+        def on_progress(pct):
+            try:
+                p = int(float(pct))
+            except (TypeError, ValueError):
+                return
+            if p != last[0]:
+                last[0] = p
+                with open(progress_file, "w") as fp:
+                    fp.write(f"{p}\n")
+
+        await svc.backup(full=True, backup_directory=args.dir, progress_callback=on_progress)
+    hb.cancel()
     print(json.dumps({"ok": True, "dir": args.dir, "encryption_enabled": enabled_encryption}))
 
 
@@ -85,6 +149,9 @@ def main():
     try:
         asyncio.run(cmd_ping(args) if args.cmd == "ping" else cmd_backup(args))
     except Exception as e:
+        if os.environ.get("IDEVICE_DEBUG"):
+            import traceback
+            traceback.print_exc()
         print(json.dumps({"ok": False, "error": str(e)[:2000], "type": type(e).__name__}))
         sys.exit(1)
 

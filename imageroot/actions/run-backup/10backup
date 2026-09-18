@@ -87,6 +87,11 @@ if proc.returncode != 0 or not result.get("ok"):
     if etype in ("TimeoutError", "ConnectionRefusedError", "OSError", "ConnectionError"):
         err = (f"could not reach the device at {ip}:62078 ({etype}). Check the IP address, "
                f"that WiFi lockdown is enabled on the device, and that the server can route to it.")
+    elif etype == "ConnectionTerminatedError":
+        err = ("the device closed the connection (ConnectionTerminatedError). Unlock the iPhone, keep it "
+               "awake and enter the passcode when it asks for it, then start the backup again.")
+    # do not leave an empty or partial snapshot behind: it would count towards retention
+    subprocess.run(["podman", "exec", CONTAINER, "rm", "-rf", dest], capture_output=True)
     dev["last_status"] = "failed"
     dev["last_error"] = err[:500]
     devices[udid] = dev
