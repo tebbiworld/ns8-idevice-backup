@@ -20,7 +20,7 @@ iOS Device Backup is a community application from the [[ns8:tebbiworld_repositor
   * the iPhone must have a passcode and WiFi lockdown enabled (see Pairing)
 
 =====Pairing a device (once, on your own computer, iPhone on USB)=====
-  - Create the pairing file with ''jitterbugpair'' ([[https://github.com/osy/Jitterbug|Jitterbug]]) → ''<UDID>.mobiledevicepairing''
+  - Create the pairing file with ''jitterbugpair'' ([[https://github.com/osy/Jitterbug|Jitterbug]]) → ''%%<UDID>.mobiledevicepairing%%''
   - In the same USB session, enable WiFi lockdown: ''pymobiledevice3 lockdown wifi-connections on'' (the iPhone needs a passcode). The jitterbugpair file alone only enables WiFi debugging, not WiFi backup.
   - Upload the file in the module, enter the iPhone's WiFi IP address, optionally set a backup encryption password.
 
@@ -28,7 +28,7 @@ iOS Device Backup is a community application from the [[ns8:tebbiworld_repositor
 If set, device-side backup encryption is enabled on the first backup. iOS encrypts on the device; the password is stored on the iPhone and is required to restore. The module also keeps it in its state (node-admin readable) for scheduled backups and restore. Keep it safe.
 
 =====Backup storage=====
-Backups are stored in the ''idevice-data'' volume (''/data/backups/<UDID>/<timestamp>''). The NS8 backup carries the pairing records and registry, not the device backups themselves by default (they can be large); add ''volumes/idevice-data'' to the include file to change that.
+Backups are stored in the ''idevice-data'' volume (''%%/data/backups/<UDID>/<timestamp>%%''). The NS8 backup carries the pairing records and registry, not the device backups themselves by default (they can be large); add ''volumes/idevice-data'' to the include file to change that.
 
 =====Limitations=====
   * not yet verified end-to-end against a physical device
