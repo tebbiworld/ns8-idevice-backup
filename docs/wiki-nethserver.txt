@@ -9,19 +9,22 @@ iOS Device Backup is a community application from the [[ns8:tebbiworld_repositor
 =====What it does=====
   * one rootless container (pymobiledevice3 engine); the module runs backups inside it on demand
   * connects to a device by explicit IP over classic lockdown TCP 62078 — no usbmux/netmuxd, no mDNS/Bonjour, works across subnet boundaries
-  * upload a jitterbugpair pairing file, set the device IP and an optional backup encryption password
-  * device-side encrypted backups, kept per device with a configurable retention
-  * restore a snapshot back onto the device (same device, or a replacement device)
+  * upload a pairing file, set the device IP and an optional backup encryption password
+  * per device: **full** backups (kept with a configurable retention) or an **incremental** backup into one persistent folder
+  * device-side encrypted backups; restore a snapshot back onto the device (same device, or a replacement device)
   * NS8 backup optionally includes the device backups too (a toggle; off by default because they are large)
+  * an optional **self-service portal**: end users log in with their AD/LDAP account and manage the backups of **their own** devices in a browser, while the admin keeps the full view in cluster-admin
 
 =====Requirements=====
   * the server must reach the iPhone on TCP 62078 (route/allow from the server subnet to the WiFi subnet)
   * the iPhone must have a passcode and WiFi lockdown enabled (see Pairing)
 
 =====Pairing a device (once, on your own computer, iPhone on USB)=====
-  - Create the pairing file with ''jitterbugpair'' ([[https://github.com/osy/Jitterbug|Jitterbug]]) → ''%%<UDID>.mobiledevicepairing%%''
-  - In the same USB session, enable WiFi lockdown: ''pymobiledevice3 lockdown wifi-connections on'' (the iPhone needs a passcode). The jitterbugpair file alone only enables WiFi debugging, not WiFi backup.
-  - Upload the file in the module, enter the iPhone's WiFi IP address, optionally set a backup encryption password.
+The module needs a lockdown pairing record for the device. The easiest source is iTunes / the Apple Devices app on the computer that already trusts the iPhone:
+  - Connect the iPhone by USB and tap **Trust This Computer** (enter the passcode).
+  - In iTunes / Apple Devices tick **Sync with this iPhone over Wi-Fi**, so the device stays reachable over WiFi.
+  - Upload the pairing record from ''%%C:\ProgramData\Apple\Lockdown\<UDID>.plist%%'' (Windows) or ''%%/var/db/lockdown/<UDID>.plist%%'' (macOS) in the module; the file name carries the UDID. Set the iPhone's WiFi IP address and, optionally, a backup encryption password.
+Give the iPhone a **fixed IP** and turn **Private Wi-Fi Address off** for that network, so its address stays reachable. The pairing record already carries the trust; you are not asked again on every backup (iOS only re-asks after a reboot or when the phone is first unlocked).
 
 =====Encryption password=====
 If set, device-side backup encryption is enabled on the first backup. iOS encrypts on the device; the password is stored on the iPhone and is required to restore. The module also keeps it in its state (node-admin readable) for scheduled backups and restore. Keep it safe.
@@ -48,6 +51,39 @@ Two ways to bring a snapshot onto a new iPhone:
   - **Apple's own flow (most robust).** Copy the innermost backup folder (the one holding ''Manifest.plist'') from ''%%/home/idevice-backup1/.local/share/containers/storage/volumes/idevice-data/_data/backups/<UDID>/<snapshot>/<UDID>/%%'' to the Finder/iTunes backup folder (macOS ''%%~/Library/Application Support/MobileSync/Backup/%%'', Windows <nowiki>%APPDATA%\Apple\MobileSync\Backup</nowiki>), then during **Set Up** the new iPhone choose *Restore from Mac or PC* and enter the backup password.
   - **Through the module.** Pair the new device, then restore the old device's snapshot onto it (a cross-device restore). Apple restores an encrypted backup only to a device set up for it, and some data is device-bound.
 
+=====Full or incremental backups=====
+Each device has a **backup mode** (a per-device switch in cluster-admin, and in the self-service portal for the user's own devices):
+  * **Full** — every run writes a new snapshot folder ''%%/data/backups/<UDID>/<timestamp>%%'' and old snapshots beyond the retention count are pruned after a successful run.
+  * **Incremental** — every run updates one persistent folder ''%%/data/backups/<UDID>/incremental%%''; nothing is pruned and a failed run never deletes it. The first incremental run transfers the whole device, later runs only the changes.
+An encrypted device is detected automatically: the module reads the device's own encryption state and never re-applies the password, so switching an already-encrypted device to incremental just works (no "invalid password" error).
+
+=====Self-service portal (end users)=====
+The portal is a second web surface with its own address, separate from cluster-admin. A user signs in with their **Active Directory / LDAP** account and sees only the devices they own. There they can:
+  * add a device (upload the pairing file, set the WiFi IP, optional encryption password) — it becomes theirs
+  * run a backup and choose full or incremental
+  * restore a snapshot onto their own device (if the admin allows it, see the switch below)
+  * rename, change the IP, or remove their device
+
+Ownership is enforced on the server for every request; a user can never see or touch another user's device. Devices added in cluster-admin have no owner until the admin assigns one. The portal is bilingual (English/German, from the browser, with a switch) and carries a short "how to get the pairing file" guide. The interface is at ''%%https://<portal-host>/%%'' (or under a path such as ''%%https://<host>/idevice%%'' if you set one).
+
+=====Setting up the self-service portal (admin)=====
+In the module's **Settings** page, section **Self-service portal**:
+  * **Portal host name (FQDN)** — the address the portal is published at through Traefik (Let's Encrypt supported). Leave empty to keep the module admin-only.
+  * **Path (optional)** — serve the portal under a path on that host instead of at the root, e.g. ''/idevice'' makes it reachable at ''host/idevice'' (similar to ''cluster-admin''). Empty means the host root.
+  * **Request a Let's Encrypt certificate** — obtain a certificate for the portal host.
+  * **Let users restore their own devices** — a restore overwrites a device and is irreversible. Off keeps restore admin-only while users can still back up.
+
+Section **Directory login (AD / LDAP)** — the portal binds directly to your directory with an admin-provided service account (no user-domain join needed):
+  * **Enable directory login** — required for the portal.
+  * **LDAP URL** — use ''%%ldaps://host:636%%'' for Active Directory; plain ''%%ldap://host:389%%'' is usually refused by AD.
+  * **Base DN** — e.g. ''%%DC=ad,DC=example,DC=org%%''.
+  * **Bind DN / service account** and **Bind password** — a read-only account used to look users up (leave the password empty on a later save to keep the stored one).
+  * **Login attribute** — what users type as their login: ''sAMAccountName'' for AD, ''uid'' for OpenLDAP.
+  * **Owner domain label** — stored with each device's owner, usually the AD domain (e.g. ''ad.example.org'').
+  * **Restrict to group DN (optional)** — only members of this group may sign in.
+
+The portal runs as a second container from the same image, needs one TCP port (published on the node loopback for Traefik) and the ''traefik@node:routeadm'' authorization; both are requested from the image on install. Saving the global options never clears these portal/LDAP settings.
+
 =====Backup into the NS8 backup=====
 The **Include device backups in the NS8 backup** switch adds the ''idevice-data'' volume to the module's NS8 (restic) backup. Off by default: the backups can be many GB per device and would roughly double the NS8 backup size. With it off, only the pairing records and the device registry are carried, so protect the backups separately (copy off the node, or turn the switch on).
 
@@ -55,7 +91,8 @@ The **Include device backups in the NS8 backup** switch adds the ''idevice-data'
   * WiFi lockdown must be enabled on the device (most common connection failure)
   * DHCP: update the device IP if it changes (a static reservation is recommended)
   * pairing can expire (re-pair and re-upload)
-  * per-user device ownership via the NS8 user domain (LDAP) is not implemented yet
+  * pairing still needs a one-time USB step on the user's own computer; the portal cannot remove it
+  * an encrypted backup cannot be restored without its password — losing the password loses the backup
 
 =====Licences=====
   * The module (ns8-idevice-backup) is GPL-3.0-or-later.
@@ -65,7 +102,6 @@ The **Include device backups in the NS8 backup** switch adds the ''idevice-data'
 =====Links=====
   * [[https://github.com/tebbiworld/ns8-idevice-backup|Module source and issues]]
   * [[https://github.com/doronz88/pymobiledevice3|pymobiledevice3]]
-  * [[https://github.com/osy/Jitterbug|Jitterbug / jitterbugpair]]
 
 {{tag>application}}
 {{tag>category:Sysadmin}}
