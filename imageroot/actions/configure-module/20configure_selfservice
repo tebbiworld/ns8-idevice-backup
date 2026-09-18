@@ -24,6 +24,10 @@ env = os.environ
 module_id = env["MODULE_ID"]
 
 host = (data.get("selfservice_host") or "").strip().lower()
+path = (data.get("selfservice_path") or "").strip()
+if path and not path.startswith("/"):
+    path = "/" + path
+path = path.rstrip("/")
 h2hs = bool(data.get("http2https", True))
 lets_encrypt = bool(data.get("lets_encrypt", False))
 
@@ -48,6 +52,7 @@ if ldap_url:
 
 agent.mset_env({
     "SELFSERVICE_HOST": host,
+    "SELFSERVICE_PATH": path,
     "TRAEFIK_HTTP2HTTPS": "True" if h2hs else "False",
     "LDAP_ENABLED": "true" if ldap_enabled else "false",
     "LDAP_URL": ldap_url,
@@ -120,6 +125,10 @@ if host:
         "lets_encrypt_check": True,
         "lets_encrypt_cleanup": True,
     }
+    if path:
+        route["path"] = path
+        route["strip_prefix"] = True
+        route["slash_redirect"] = True
     if "lets_encrypt" in data:
         route["lets_encrypt"] = lets_encrypt
     agent.set_route(route)

@@ -80,6 +80,12 @@
             "type": "string",
             "title": "Owner user domain label",
             "maxLength": 253
+        },
+        "selfservice_path": {
+            "type": "string",
+            "title": "Self-service path (optional, e.g. /idevice)",
+            "description": "Serve the portal under this path on the host instead of at the root. Empty = at the host root.",
+            "maxLength": 64
         }
     }
 }

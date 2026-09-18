@@ -98,6 +98,9 @@
         },
         "ldap_domain": {
             "type": "string"
+        },
+        "selfservice_path": {
+            "type": "string"
         }
     }
 }

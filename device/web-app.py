@@ -27,9 +27,11 @@ import time
 
 import ldap3
 from ldap3.utils.conv import escape_filter_chars
-from flask import Flask, request, redirect, session, abort
+from flask import Flask, request, redirect, session, abort, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-insecure-change-me")
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -240,17 +242,18 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>{title}</title><style>
 :root{{color-scheme:light dark}}
 body{{margin:0;font:15px/1.5 system-ui,sans-serif;background:#f4f4f4;color:#161616}}
-.wrap{{max-width:88rem;margin:1.5rem auto;padding:0 1.5rem}}
+.wrap{{max-width:104rem;margin:1.5rem auto;padding:0 1rem}}
 .login{{max-width:26rem;margin:5vh auto}}
 .card{{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:1.25rem;margin-bottom:1rem}}
 h1{{font-size:1.25rem;margin:0}} h2{{font-size:1rem;margin:0 0 .75rem}}
 .top{{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}}
 label{{display:block;font-size:.8rem;color:#525252;margin:.6rem 0 .2rem}}
 input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #8d8d8d;border-radius:4px;font-size:1rem;background:#fff;color:#161616}}
+.ip-in{{width:9rem}} .mode-sel{{width:auto;min-width:8.5rem}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:34%}} col.c-status{{width:26%}} col.c-mode{{width:14%}} col.c-act{{width:26%}}
+col.c-dev{{width:32%}} col.c-status{{width:22%}} col.c-mode{{width:16%}} col.c-act{{width:30%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
@@ -267,11 +270,12 @@ def render(body, refresh=False):
 
 
 def login_view(err=False):
+    login_url = esc(url_for("login"))
     e = '<div class="err">Invalid username or password.</div>' if err else ""
     body = (
         '<div class="login">'
         f'<div class="card"><h1>{esc(APP_TITLE)}</h1></div>'
-        f'<div class="card">{e}<form method="post" action="/login">'
+        f'<div class="card">{e}<form method="post" action="{login_url}">'
         f'<input type="hidden" name="csrf" value="{esc(csrf_token())}">'
         '<label for="u">Username</label><input id="u" name="username" autocomplete="username" autofocus>'
         '<label for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password">'
@@ -285,13 +289,15 @@ def fmt_time(epoch):
     if not epoch:
         return "—"
     try:
-        return time.strftime("%Y-%m-%d %H:%M", time.localtime(int(epoch)))
+        return time.strftime("%d.%m. %H:%M", time.localtime(int(epoch)))
     except Exception:
         return str(epoch)
 
 
 def devices_view():
     uid = session["uid"]
+    logout_url = esc(url_for("logout"))
+    add_url = esc(url_for("device_add"))
     disp = esc(session.get("display", uid))
     devs = my_devices(uid)
     tok = esc(csrf_token())
@@ -300,6 +306,11 @@ def devices_view():
     rows = ""
     for d in devs:
         udid = esc(d["udid"])
+        u_ip = esc(url_for("device_ip", udid=d["udid"]))
+        u_mode = esc(url_for("device_mode", udid=d["udid"]))
+        u_backup = esc(url_for("device_backup", udid=d["udid"]))
+        u_restore = esc(url_for("device_restore", udid=d["udid"]))
+        u_delete = esc(url_for("device_delete", udid=d["udid"]))
         status = ""
         if d["running"]:
             status = '<span class="muted">backing up…</span>'
@@ -316,7 +327,7 @@ def devices_view():
             restore = ""
             if ALLOW_RESTORE:
                 restore = (
-                    f'<form method="post" action="/devices/{udid}/restore" onsubmit="return confirm('
+                    f'<form method="post" action="{u_restore}" onsubmit="return confirm('
                     f"'This ERASES the device and restores the selected backup. Continue?');\">"
                     f'<input type="hidden" name="csrf" value="{tok}">'
                     f'<select name="snapshot">{opts}</select>'
@@ -327,22 +338,22 @@ def devices_view():
         disabled = "disabled" if d["running"] else ""
         rows += f"""<tr>
 <td><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div>
-  <form method="post" action="/devices/{udid}/ip" class="row" style="margin-top:.4rem">
+  <form method="post" action="{u_ip}" class="row" style="margin-top:.4rem">
     <input type="hidden" name="csrf" value="{tok}">
-    <div><input name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP"></div>
+    <div><input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP"></div>
     <div style="flex:0"><button class="sec" {disabled}>Save IP</button></div></form></td>
 <td>{status}<div style="margin-top:.3rem">{snap_html}</div></td>
 <td>enc {enc}
-  <form method="post" action="/devices/{udid}/mode" style="margin-top:.3rem">
+  <form method="post" action="{u_mode}" style="margin-top:.3rem">
     <input type="hidden" name="csrf" value="{tok}">
-    <select name="backup_mode" onchange="this.form.submit()">
+    <select class="mode-sel" name="backup_mode" onchange="this.form.submit()">
       <option value="full" {'selected' if (d.get('backup_mode') or 'full')=='full' else ''}>Full</option>
       <option value="incremental" {'selected' if d.get('backup_mode')=='incremental' else ''}>Incremental</option>
     </select></form></td>
 <td><div class="actbtns">
-  <form method="post" action="/devices/{udid}/backup"><input type="hidden" name="csrf" value="{tok}">
+  <form method="post" action="{u_backup}"><input type="hidden" name="csrf" value="{tok}">
     <button {disabled}>Back up now</button></form>
-  <form method="post" action="/devices/{udid}/delete" onsubmit="return confirm('Remove this device from the list?');">
+  <form method="post" action="{u_delete}" onsubmit="return confirm('Remove this device from the list?');">
     <input type="hidden" name="csrf" value="{tok}"><button class="danger" {disabled}>Remove</button></form>
 </div></td></tr>"""
 
@@ -351,14 +362,14 @@ def devices_view():
 
     body = f"""
 <div class="top"><h1>Hello, {disp}</h1>
-  <form method="post" action="/logout"><input type="hidden" name="csrf" value="{tok}">
+  <form method="post" action="{logout_url}"><input type="hidden" name="csrf" value="{tok}">
   <button class="sec">Log out</button></form></div>
 <div class="card"><h2>My devices</h2>
 <table><colgroup><col class="c-dev"><col class="c-status"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>Device</th><th>Last backup</th><th>Mode</th><th>Actions</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <div class="card"><h2>Add a device</h2>
 <p class="muted">Create the pairing file on your computer with the iPhone on USB, enable WiFi lockdown once, then upload the file here. The device is registered to your account.</p>
-<form method="post" action="/devices/add" enctype="multipart/form-data">
+<form method="post" action="{add_url}" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{tok}">
   <div class="row">
     <div><label>Name</label><input name="name" placeholder="My iPhone"></div>
@@ -382,14 +393,14 @@ def healthz():
 @app.get("/")
 def index():
     if not session.get("uid"):
-        return redirect("/login")
+        return redirect(url_for("login_form"))
     return devices_view()
 
 
 @app.get("/login")
 def login_form():
     if session.get("uid"):
-        return redirect("/")
+        return redirect(url_for("index"))
     return login_view(err=bool(request.args.get("e")))
 
 
@@ -398,7 +409,7 @@ def login():
     check_csrf()
     res = ldap_authenticate((request.form.get("username") or "").strip(), request.form.get("password") or "")
     if not res:
-        return redirect("/login?e=1")
+        return redirect(url_for("login_form", e=1))
     uid, display = res
     keep = session.get("csrf")
     session.clear()
@@ -406,14 +417,14 @@ def login():
     session.permanent = True
     session["uid"] = uid
     session["display"] = display
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 @app.post("/logout")
 def logout():
     check_csrf()
     session.clear()
-    return redirect("/login")
+    return redirect(url_for("login_form"))
 
 
 def _require_owned(udid):
@@ -435,20 +446,20 @@ def device_add():
         abort(403)
     f = request.files.get("pairing")
     if not f:
-        return redirect("/?e=nofile")
+        return redirect(url_for("index", e="nofile"))
     raw = f.read()
     try:
         pl = plistlib.loads(raw)
     except Exception:
-        return redirect("/?e=badfile")
+        return redirect(url_for("index", e="badfile"))
     udid = str(pl.get("UDID") or "").strip()
     if not udid:
         udid = re.sub(r"\.(plist|mobiledevicepairing)$", "", os.path.basename(f.filename or ""), flags=re.I)
     if not UDID_RE.match(udid):
-        return redirect("/?e=baududid")
+        return redirect(url_for("index", e="baududid"))
     for key in ("HostID", "SystemBUID", "HostCertificate", "DeviceCertificate"):
         if key not in pl:
-            return redirect("/?e=incomplete")
+            return redirect(url_for("index", e="incomplete"))
     os.makedirs(LOCKDOWN_DIR, exist_ok=True)
     with open(os.path.join(LOCKDOWN_DIR, f"{udid}.plist"), "wb") as fp:
         fp.write(raw)
@@ -475,7 +486,7 @@ def device_add():
             d["encryption_password"] = pw
         devices[udid] = d
         save_devices(devices)
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 @app.post("/devices/<udid>/ip")
@@ -486,7 +497,7 @@ def device_ip(udid):
         devices = load_devices()
         devices[udid]["ip"] = (request.form.get("ip") or "").strip()
         save_devices(devices)
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 @app.post("/devices/<udid>/mode")
@@ -498,7 +509,7 @@ def device_mode(udid):
         devices = load_devices()
         devices[udid]["backup_mode"] = "incremental" if m == "incremental" else "full"
         save_devices(devices)
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 @app.post("/devices/<udid>/backup")
@@ -506,7 +517,7 @@ def device_backup(udid):
     check_csrf()
     dev = _require_owned(udid)
     start_backup(udid, dev)
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 @app.post("/devices/<udid>/restore")
@@ -520,7 +531,7 @@ def device_restore(udid):
         abort(404)
     ip = (dev.get("ip") or "").strip()
     if not ip or udid in _running:
-        return redirect("/")
+        return redirect(url_for("index"))
     dest = f"{BACKUP_ROOT}/{udid}/{snapshot}"
     enc_pw = dev.get("encryption_password") or ""
 
@@ -536,7 +547,7 @@ def device_restore(udid):
 
     _running[udid] = True
     threading.Thread(target=_do, daemon=True).start()
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 @app.post("/devices/<udid>/delete")
@@ -551,7 +562,7 @@ def device_delete(udid):
         os.remove(os.path.join(LOCKDOWN_DIR, f"{udid}.plist"))
     except OSError:
         pass
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
