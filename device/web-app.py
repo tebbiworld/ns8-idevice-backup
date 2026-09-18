@@ -249,14 +249,15 @@ h1{{font-size:1.25rem;margin:0}} h2{{font-size:1rem;margin:0 0 .75rem}}
 .top{{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}}
 label{{display:block;font-size:.8rem;color:#525252;margin:.6rem 0 .2rem}}
 input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #8d8d8d;border-radius:4px;font-size:1rem;background:#fff;color:#161616}}
-.ip-in{{width:9rem}} .mode-sel{{width:auto;min-width:8.5rem}}
+.ip-in{{width:8rem}} .mode-sel{{width:auto;min-width:8rem}}
+.iprow button{{white-space:nowrap}}
 .iprow{{display:flex;gap:.5rem;align-items:center}}
-.snaprow{{display:flex;gap:.5rem;align-items:center;margin-top:.3rem}} .snap-sel{{width:auto;min-width:9rem;max-width:12rem}}
+.snaprow{{display:flex;gap:.5rem;align-items:center;margin-top:.3rem;flex-wrap:nowrap}} .snap-sel{{width:11rem;min-width:0;max-width:100%}}
 .act-cell{{text-align:right}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:19%}} col.c-ip{{width:14%}} col.c-last{{width:11%}} col.c-snap{{width:22%}} col.c-mode{{width:11%}} col.c-act{{width:23%}}
+col.c-dev{{width:20%}} col.c-ip{{width:15%}} col.c-last{{width:11%}} col.c-snap{{width:20%}} col.c-mode{{width:11%}} col.c-act{{width:23%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
@@ -344,7 +345,7 @@ def devices_view():
 <td><form method="post" action="{u_ip}" class="iprow">
     <input type="hidden" name="csrf" value="{tok}">
     <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP">
-    <button class="sec" {disabled}>Save IP</button></form></td>
+    <button class="sec" {disabled}>Save</button></form></td>
 <td>{status}</td>
 <td>{snap_html or '<span class="muted">—</span>'}</td>
 <td>enc {enc}
