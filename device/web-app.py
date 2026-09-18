@@ -92,6 +92,7 @@ T = {
         "howto_2": "Your computer now holds a pairing file. On Windows it is %ProgramData%\\Apple\\Lockdown\\<UDID>.plist, on macOS /var/db/lockdown/<UDID>.plist. Upload that file above without renaming it.",
         "howto_3": "Enable WiFi access once: in iTunes / Apple Devices tick \u201cSync with this iPhone over Wi-Fi\u201d and apply, or run pymobiledevice3 lockdown wifi-connections on. The iPhone must have a passcode.",
         "howto_4": "Find the WiFi IP under Settings \u2192 Wi-Fi \u2192 the (i) next to the network, and enter it above.",
+        "howto_5": "Keep the address stable: give the iPhone a fixed IP (a DHCP reservation on your router) and turn Private Wi-Fi Address OFF for this network (Settings \u2192 Wi-Fi \u2192 (i) \u2192 Private Wi-Fi Address). A changing address breaks the WiFi backup.",
     },
     "de": {
         "invalid": "Benutzername oder Passwort falsch.",
@@ -119,6 +120,7 @@ T = {
         "howto_2": "Der Rechner legt jetzt eine Pairing-Datei ab. Unter Windows %ProgramData%\\Apple\\Lockdown\\<UDID>.plist, unter macOS /var/db/lockdown/<UDID>.plist. Diese Datei oben hochladen, ohne sie umzubenennen.",
         "howto_3": "WLAN-Zugriff einmal aktivieren: in iTunes / Apple-Ger\u00e4te den Haken \u201eMit diesem iPhone \u00fcber WLAN synchronisieren\u201c setzen, oder pymobiledevice3 lockdown wifi-connections on ausf\u00fchren. Das iPhone braucht einen Code.",
         "howto_4": "Die WLAN-IP unter Einstellungen \u2192 WLAN \u2192 das (i) neben dem Netz ablesen und oben eintragen.",
+        "howto_5": "Die Adresse stabil halten: dem iPhone eine feste IP geben (DHCP-Reservierung am Router) und \u201ePrivate WLAN-Adresse\u201c f\u00fcr dieses Netz AUSschalten (Einstellungen \u2192 WLAN \u2192 (i) \u2192 Private WLAN-Adresse). Eine wechselnde Adresse verhindert das WLAN-Backup.",
     },
 }
 
@@ -348,12 +350,12 @@ input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #
 .iprow button{{white-space:nowrap}}
 .iprow{{display:flex;gap:.5rem;align-items:center}}
 .snaprow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap}}
-.moderow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap;white-space:nowrap}} .snap-sel{{width:13rem;min-width:0;max-width:100%}}
+.moderow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap;white-space:nowrap}} .snap-sel{{width:14.5rem;min-width:0;max-width:100%}}
 .act-cell{{text-align:right}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:14%}} col.c-ip{{width:15%}} col.c-last{{width:13%}} col.c-snap{{width:22%}} col.c-mode{{width:13%}} col.c-act{{width:23%}}
+col.c-dev{{width:14%}} col.c-ip{{width:14%}} col.c-last{{width:12%}} col.c-snap{{width:25%}} col.c-mode{{width:12%}} col.c-act{{width:23%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.75rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}} .row>div.sm{{flex:0 1 13rem}}
@@ -366,7 +368,7 @@ col.c-dev{{width:14%}} col.c-ip{{width:15%}} col.c-last{{width:13%}} col.c-snap{
 
 
 def howto_html():
-    steps = "".join(f"<li>{esc(t(k))}</li>" for k in ("howto_1", "howto_2", "howto_3", "howto_4"))
+    steps = "".join(f"<li>{esc(t(k))}</li>" for k in ("howto_1", "howto_2", "howto_3", "howto_4", "howto_5"))
     return (f'<div class="card"><h2>{esc(t("howto_title"))}</h2>'
             f'<p class="muted">{esc(t("howto_intro"))}</p><ol class="howto">{steps}</ol></div>')
 
