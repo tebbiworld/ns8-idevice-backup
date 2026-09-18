@@ -258,7 +258,7 @@ input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:20%}} col.c-ip{{width:13%}} col.c-last{{width:11%}} col.c-snap{{width:24%}} col.c-mode{{width:10%}} col.c-act{{width:22%}}
+col.c-dev{{width:14%}} col.c-ip{{width:12%}} col.c-last{{width:11%}} col.c-snap{{width:27%}} col.c-mode{{width:10%}} col.c-act{{width:26%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
