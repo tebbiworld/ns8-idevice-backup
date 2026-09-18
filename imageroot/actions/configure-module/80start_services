@@ -5,7 +5,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+import os
 import subprocess
 
 subprocess.run(["systemctl", "--user", "enable", "idevice-backup.service"], check=True)
 subprocess.run(["systemctl", "--user", "restart", "idevice-backup.service"], check=True)
+
+# Automatic-backup schedule: enable the hourly timer only when turned on.
+autobackup = os.environ.get("AUTOBACKUP_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+if autobackup:
+    subprocess.run(["systemctl", "--user", "enable", "--now", "idevice-autobackup.timer"], check=False)
+else:
+    subprocess.run(["systemctl", "--user", "disable", "--now", "idevice-autobackup.timer"], check=False)

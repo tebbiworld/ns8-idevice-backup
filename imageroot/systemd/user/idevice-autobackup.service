@@ -1,0 +1,16 @@
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Oneshot: run automatic backups of due devices (see bin/autobackup).
+
+[Unit]
+Description=iOS device automatic backup run
+After=idevice-backup.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=%S/state/environment
+WorkingDirectory=%S/state
+ExecStart=runagent autobackup
+SyslogIdentifier=idevice-autobackup

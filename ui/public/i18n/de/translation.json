@@ -113,7 +113,11 @@
     "ldap_group_placeholder": "CN=iphone-users,OU=Groups,DC=ad,DC=example,DC=org",
     "ldap_domain": "Domänen-Label des Besitzers",
     "ldap_domain_helper": "Label, das beim Besitzer jedes Geräts gespeichert wird, meist die AD-Domäne, z. B. ad.example.org.",
-    "ldap_domain_placeholder": "ad.example.org"
+    "ldap_domain_placeholder": "ad.example.org",
+    "autobackup": "Automatische Backups",
+    "autobackup_helper": "Geräte automatisch sichern. Ein stündlicher Timer sichert jedes Gerät, dessen letztes Backup älter als das Intervall ist; schlafende Geräte werden beim nächsten Lauf erneut versucht.",
+    "autobackup_interval": "Backup-Intervall (Stunden)",
+    "autobackup_interval_helper": "Mindeststunden zwischen automatischen Sicherungen eines Geräts (z. B. 24 = täglich)."
   },
   "about": {
     "title": "Über"

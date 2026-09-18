@@ -79,6 +79,8 @@ for udid, d in sorted(registry.items(), key=lambda kv: kv[1].get("name", "")):
 config = {
     "retention": int(env.get("RETENTION", "3")),
     "include_backups": env.get("IDEVICE_INCLUDE_BACKUPS", "false").strip().lower() in ("1", "true", "yes", "on"),
+    "autobackup_enabled": env.get("AUTOBACKUP_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"),
+    "autobackup_interval_hours": int(env.get("AUTOBACKUP_INTERVAL_HOURS", "24") or 24),
     "selfservice_host": env.get("SELFSERVICE_HOST", ""),
     "selfservice_path": env.get("SELFSERVICE_PATH", ""),
     "selfservice_url": (f"https://{env.get('SELFSERVICE_HOST')}{env.get('SELFSERVICE_PATH',)}/" if env.get("SELFSERVICE_HOST") else ""),

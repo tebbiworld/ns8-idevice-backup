@@ -47,6 +47,12 @@
               <template slot="text-right">{{ $t("settings.on") }}</template>
             </cv-toggle>
             <div class="bx--form__helper-text">{{ $t("settings.include_backups_helper") }}</div>
+            <cv-toggle value="autobackup" :label="$t('settings.autobackup')" v-model="autobackup_enabled" :disabled="busy" class="field">
+              <template slot="text-left">{{ $t("settings.off") }}</template>
+              <template slot="text-right">{{ $t("settings.on") }}</template>
+            </cv-toggle>
+            <cv-number-input v-if="autobackup_enabled" :label="$t('settings.autobackup_interval')" v-model="autobackup_interval_hours" :min="1" :max="720" :helper-text="$t('settings.autobackup_interval_helper')" :disabled="busy" class="field"></cv-number-input>
+            <div class="bx--form__helper-text">{{ $t("settings.autobackup_helper") }}</div>
             <NsButton kind="primary" :icon="Save20" :loading="loading.configureModule" :disabled="busy" class="field">{{ $t("settings.save") }}</NsButton>
           </cv-form>
         </cv-tile>
@@ -234,6 +240,8 @@ export default {
       TrashCan16,
       retention: 3,
       include_backups: false,
+      autobackup_enabled: false,
+      autobackup_interval_hours: 24,
       container_running: false,
       web_running: false,
       selfserviceUrl: "",
@@ -342,6 +350,8 @@ export default {
       const c = taskResult.output;
       this.retention = c.retention || 3;
       this.include_backups = !!c.include_backups;
+      this.autobackup_enabled = !!c.autobackup_enabled;
+      this.autobackup_interval_hours = c.autobackup_interval_hours || 24;
       this.container_running = !!c.container_running;
       this.web_running = !!c.web_running;
       this.selfserviceUrl = c.selfservice_url || "";
@@ -402,7 +412,7 @@ export default {
       this.core.$root.$once(`${taskAction}-completed-${eventId}`, () => { this.loading.configureModule = false; this.getConfiguration(); });
       const res = await to(this.createModuleTaskForApp(this.instanceName, {
         action: taskAction,
-        data: { retention: Number(this.retention), include_backups: this.include_backups },
+        data: { retention: Number(this.retention), include_backups: this.include_backups, autobackup_enabled: this.autobackup_enabled, autobackup_interval_hours: Number(this.autobackup_interval_hours) },
         extra: { title: this.$t("settings.configure_instance", { instance: this.instanceName }), description: this.$t("common.processing"), eventId },
       }));
       if (res[0]) { this.error.configureModule = this.getErrorMessage(res[0]); this.loading.configureModule = false; }

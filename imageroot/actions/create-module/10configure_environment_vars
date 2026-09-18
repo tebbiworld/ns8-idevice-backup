@@ -25,4 +25,6 @@ agent.mset_env({
     "SESSION_SECRET": secrets.token_hex(32),
     "SELFSERVICE_HOST": "",
     "LDAP_ENABLED": "false",
+    "AUTOBACKUP_ENABLED": "false",
+    "AUTOBACKUP_INTERVAL_HOURS": "24",
 })

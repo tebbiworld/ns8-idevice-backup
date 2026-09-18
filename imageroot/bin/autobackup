@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Automatic backups. Triggered hourly by idevice-autobackup.timer. For every
+# device whose last SUCCESSFUL backup is older than the configured interval (and
+# that has a WiFi IP and is not opted out), run the normal run-backup action.
+# Devices that are asleep/unreachable simply fail this run and are retried on the
+# next hourly tick, so the interval is a floor, not a fixed clock time.
+
+import json
+import os
+import subprocess
+import sys
+import time
+
+env = os.environ
+if env.get("AUTOBACKUP_ENABLED", "false").strip().lower() not in ("1", "true", "yes", "on"):
+    print("autobackup: disabled", file=sys.stderr)
+    sys.exit(0)
+
+try:
+    interval = max(1.0, float(env.get("AUTOBACKUP_INTERVAL_HOURS", "24"))) * 3600.0
+except ValueError:
+    interval = 24 * 3600.0
+
+
+def load_devices():
+    try:
+        with open("devices.json") as fp:
+            return json.load(fp)
+    except FileNotFoundError:
+        return {}
+
+
+action = os.path.expanduser("~/.config/actions/run-backup/10backup")
+if not os.path.exists(action):
+    action = "/imageroot/actions/run-backup/10backup"
+
+devices = load_devices()
+now = time.time()
+due = 0
+for udid, dev in devices.items():
+    if dev.get("auto_backup") is False:
+        continue
+    if not (dev.get("ip") or "").strip():
+        continue
+    last = dev.get("last_backup") or 0
+    if now - last < interval:
+        continue
+    due += 1
+    name = dev.get("name", udid)
+    age_h = int((now - last) / 3600) if last else "never"
+    print(f"autobackup: {name} due (last success {age_h}h ago), backing up", file=sys.stderr)
+    proc = subprocess.run([sys.executable, action], input=json.dumps({"udid": udid}),
+                          capture_output=True, text=True)
+    ok = proc.returncode == 0 and '"status": "ok"' in (proc.stdout or "")
+    if ok:
+        print(f"autobackup: {name} ok", file=sys.stderr)
+    else:
+        tail = (proc.stderr or "").strip().splitlines()[-1:] or [""]
+        print(f"autobackup: {name} failed/unreachable (will retry next run): {tail[0][-160:]}", file=sys.stderr)
+
+if due == 0:
+    print("autobackup: nothing due", file=sys.stderr)

@@ -363,6 +363,23 @@ col.c-dev{{width:14%}} col.c-ip{{width:17%}} col.c-last{{width:13%}} col.c-snap{
 .actbtns{{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}}
 .howto{{margin:.5rem 0 0 1.2rem;padding:0}} .howto li{{margin-bottom:.5rem}} form{{margin:0}}
 @media (prefers-color-scheme:dark){{body{{background:#161616;color:#f4f4f4}}.card{{background:#262626;border-color:#393939}}input,select{{background:#161616;color:#f4f4f4;border-color:#6f6f6f}}}}
+/* Phones: the wide device table becomes one stacked card per device. */
+@media (max-width:640px){{
+  .wrap{{margin:.75rem auto;padding:0 .75rem}}
+  .top{{flex-wrap:wrap;gap:.5rem}}
+  table,tbody,tr,td{{display:block;width:auto}} thead{{display:none}} table{{table-layout:auto}}
+  tr{{border:1px solid #e0e0e0;border-radius:8px;margin-bottom:1rem;padding:.35rem .85rem;background:#fff}}
+  td{{border:0;padding:.45rem 0}} td:first-child{{padding-top:.2rem}}
+  td::before{{content:attr(data-label);display:block;font-size:.72rem;color:#6f6f6f;margin-bottom:.2rem}}
+  td.c-name::before{{content:none}} td.c-name{{font-size:1.05rem}}
+  .iprow,.snaprow,.moderow,.actbtns{{flex-wrap:wrap;white-space:normal}}
+  .act-cell{{text-align:left}} .actbtns{{justify-content:flex-start}}
+  .ip-in,.snap-sel,.mode-sel{{width:100%}}
+  .iprow .ip-in,.snaprow .snap-sel{{flex:1 1 60%}} .iprow button,.snaprow button{{flex:1 1 auto}}
+  .actbtns form,.actbtns button{{flex:1 1 auto}}
+  .row>div,.row>div.sm{{flex:1 1 100%}}
+}}
+@media (max-width:640px) and (prefers-color-scheme:dark){{tr{{background:#262626;border-color:#393939}}}}
 </style></head><body><div class="wrap">{body}
 <p class="muted" style="text-align:center">{footer}</p></div></body></html>"""
 
@@ -465,21 +482,21 @@ def devices_view():
         enc = "✓" if (d.get("encryption") or d.get("encryption_password_set") or d.get("encryption_password")) else "—"
         disabled = "disabled" if d["running"] else ""
         rows += f"""<tr>
-<td><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div></td>
-<td><form method="post" action="{u_ip}" class="iprow">
+<td class="c-name" data-label="{L['h_device']}"><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div></td>
+<td data-label="{L['h_ip']}"><form method="post" action="{u_ip}" class="iprow">
     <input type="hidden" name="csrf" value="{tok}">
     <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="{L['f_ip']}">
     <button class="sec" {disabled}>{L['save']}</button></form></td>
-<td>{status}</td>
-<td>{snap_html or '<span class="muted">—</span>'}</td>
-<td><div class="moderow"><span class="muted">{L['enc']} {enc}</span>
+<td data-label="{L['h_last']}">{status}</td>
+<td data-label="{L['h_snap']}">{snap_html or '<span class="muted">—</span>'}</td>
+<td data-label="{L['h_mode']}"><div class="moderow"><span class="muted">{L['enc']} {enc}</span>
   <form method="post" action="{u_mode}">
     <input type="hidden" name="csrf" value="{tok}">
     <select class="mode-sel" name="backup_mode" onchange="this.form.submit()">
       <option value="full" {'selected' if (d.get('backup_mode') or 'full')=='full' else ''}>{L['full']}</option>
       <option value="incremental" {'selected' if d.get('backup_mode')=='incremental' else ''}>{L['incremental']}</option>
     </select></form></div></td>
-<td class="act-cell"><div class="actbtns">
+<td class="act-cell" data-label="{L['h_actions']}"><div class="actbtns">
   <form method="post" action="{u_backup}"><input type="hidden" name="csrf" value="{tok}">
     <button {disabled}>{L['backup_now']}</button></form>
   <form method="post" action="{u_delete}" onsubmit="return confirm('{cr_remove}');">

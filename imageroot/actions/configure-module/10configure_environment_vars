@@ -23,6 +23,16 @@ include = bool(data.get("include_backups", False))
 agent.set_env("RETENTION", str(retention))
 agent.set_env("IDEVICE_INCLUDE_BACKUPS", "true" if include else "false")
 
+# Automatic backups (scheduler). Enable + interval in hours; the hourly timer
+# checks which devices are due.
+if "autobackup_enabled" in data:
+    agent.set_env("AUTOBACKUP_ENABLED", "true" if data.get("autobackup_enabled") else "false")
+if data.get("autobackup_interval_hours") is not None:
+    try:
+        agent.set_env("AUTOBACKUP_INTERVAL_HOURS", str(max(1, int(data["autobackup_interval_hours"]))))
+    except (TypeError, ValueError):
+        pass
+
 # Rewrite state-include.conf so the NS8 backup carries (or omits) volumes/idevice-data.
 env = dict(os.environ)
 env["IDEVICE_INCLUDE_BACKUPS"] = "true" if include else "false"

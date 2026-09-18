@@ -113,7 +113,11 @@
     "ldap_group_placeholder": "CN=iphone-users,OU=Groups,DC=ad,DC=example,DC=org",
     "ldap_domain": "Owner domain label",
     "ldap_domain_helper": "Label stored with each device's owner, usually the AD domain, e.g. ad.example.org.",
-    "ldap_domain_placeholder": "ad.example.org"
+    "ldap_domain_placeholder": "ad.example.org",
+    "autobackup": "Automatic backups",
+    "autobackup_helper": "Back up devices automatically. An hourly timer backs up each device whose last backup is older than the interval; devices that are asleep are retried on the next run.",
+    "autobackup_interval": "Backup interval (hours)",
+    "autobackup_interval_helper": "Minimum hours between automatic backups of a device (e.g. 24 = daily)."
   },
   "about": {
     "title": "About"

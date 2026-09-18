@@ -15,3 +15,11 @@ systemctl --user restart idevice-backup.service
 if systemctl --user is-enabled idevice-web.service >/dev/null 2>&1; then
     systemctl --user restart idevice-web.service || true
 fi
+
+# Reconcile the automatic-backup timer with the stored setting (the unit is new
+# in this version, so an updated instance needs it enabled/disabled to match).
+if grep -qiE '^AUTOBACKUP_ENABLED=(1|true|yes|on)$' "${AGENT_STATE_DIR:-.}/environment" 2>/dev/null; then
+    systemctl --user enable --now idevice-autobackup.timer || true
+else
+    systemctl --user disable --now idevice-autobackup.timer || true
+fi

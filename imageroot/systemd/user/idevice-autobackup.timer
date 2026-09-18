@@ -1,0 +1,19 @@
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Check hourly whether any device is due for an automatic backup. The interval
+# (AUTOBACKUP_INTERVAL_HOURS) is enforced per device inside the run, so an
+# asleep phone is retried each hour until it succeeds. Enabled/disabled by
+# configure-module based on AUTOBACKUP_ENABLED.
+
+[Unit]
+Description=iOS device automatic backup schedule
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

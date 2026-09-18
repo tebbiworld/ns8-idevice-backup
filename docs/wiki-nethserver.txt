@@ -84,6 +84,9 @@ Section **Directory login (AD / LDAP)** — the portal binds directly to your di
 
 The portal runs as a second container from the same image, needs one TCP port (published on the node loopback for Traefik) and the ''traefik@node:routeadm'' authorization; both are requested from the image on install. Saving the global options never clears these portal/LDAP settings.
 
+=====Automatic backups=====
+Turn on **Automatic backups** in the module settings and set an interval in hours. An hourly timer then backs up every device whose last backup is older than the interval, using each device's mode (full or incremental). A device that is asleep or unreachable simply fails that run and is retried on the next hourly tick, so the interval is a floor, not a fixed clock time. The iPhone still has to be awake, on WiFi and reachable for a run to succeed.
+
 =====Backup into the NS8 backup=====
 The **Include device backups in the NS8 backup** switch adds the ''idevice-data'' volume to the module's NS8 (restic) backup. Off by default: the backups can be many GB per device and would roughly double the NS8 backup size. With it off, only the pairing records and the device registry are carried, so protect the backups separately (copy off the node, or turn the switch on).
 

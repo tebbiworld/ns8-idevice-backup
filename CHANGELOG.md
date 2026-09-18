@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.3 — 2026-09-18
+
+- **Automatic backups.** A per-instance schedule backs up devices without anyone
+  clicking. Enable it in Settings and set an interval in hours; an hourly timer
+  backs up each device whose last backup is older than the interval and retries
+  devices that were asleep on the next run.
+- **Mobile-friendly self-service portal.** On phones the device table now stacks
+  into one card per device instead of overflowing sideways.
+
 ## 1.2.2 — 2026-09-18
 
 - **Encryption-password fix.** Backing up an already-encrypted device no longer
