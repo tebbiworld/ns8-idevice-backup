@@ -2,14 +2,49 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "upload-pairing input",
     "$id": "http://nethserver.org/json-schema/task/input/idevice-backup/upload-pairing",
-    "description": "Upload a jitterbugpair pairing file and register the device",
-    "examples": [ { "content": "PD94bWw...", "name": "Thorstens iPhone", "ip": "192.168.5.40" } ],
+    "description": "Upload a lockdown pairing record (iTunes <UDID>.plist or jitterbugpair file) and register the device",
+    "examples": [
+        {
+            "content": "PD94bWw...",
+            "name": "Thorstens iPhone",
+            "ip": "192.168.5.40"
+        }
+    ],
     "type": "object",
-    "required": ["content"],
+    "required": [
+        "content"
+    ],
     "properties": {
-        "content": { "type": "string", "title": "Base64 of the pairing file", "minLength": 1, "maxLength": 200000 },
-        "name": { "type": "string", "title": "Device display name", "maxLength": 100 },
-        "ip": { "type": "string", "title": "Device IP address on WiFi", "maxLength": 253 },
-        "encryption_password": { "type": "string", "title": "Backup encryption password", "maxLength": 200 }
+        "content": {
+            "type": "string",
+            "title": "Base64 of the pairing file",
+            "minLength": 1,
+            "maxLength": 200000
+        },
+        "name": {
+            "type": "string",
+            "title": "Device display name",
+            "maxLength": 100
+        },
+        "ip": {
+            "type": "string",
+            "title": "Device IP address on WiFi",
+            "maxLength": 253
+        },
+        "encryption_password": {
+            "type": "string",
+            "title": "Backup encryption password",
+            "maxLength": 200
+        },
+        "filename": {
+            "type": "string",
+            "title": "Original file name, used as UDID when the plist has no UDID key",
+            "maxLength": 255
+        },
+        "udid": {
+            "type": "string",
+            "title": "Device UDID, overrides the file name",
+            "maxLength": 45
+        }
     }
 }

@@ -32,21 +32,32 @@ device by its IP address over the classic lockdown TCP port (62078) with a
 
 Two steps are required. The second is the one people miss:
 
-1. **Create the pairing file** with `jitterbugpair`
-   ([Jitterbug](https://github.com/osy/Jitterbug)) while the iPhone is on USB.
-   It writes `<UDID>.mobiledevicepairing`.
-2. **Enable WiFi lockdown** in the same USB session:
+1. **Get the pairing file.** Connect the iPhone by USB, open iTunes or the
+   Apple Devices app and confirm *Trust this computer*. The computer then
+   holds a lockdown pairing record for the device:
+
+   - Windows: `C:\ProgramData\Apple\Lockdown\<UDID>.plist`
+   - macOS: `/var/db/lockdown/<UDID>.plist` (root only)
+
+   Upload that file **without renaming it**: the record has no UDID inside,
+   the module takes the UDID from the file name. Alternatively use a
+   `<UDID>.mobiledevicepairing` file made by `jitterbugpair`
+   ([Jitterbug](https://github.com/osy/Jitterbug), archived; the binaries are
+   under *Assets* of release v1.3.1).
+2. **Enable WiFi connections** once over USB. Either tick *Sync with this
+   iPhone over Wi-Fi* in iTunes / Apple Devices and apply, or run
 
        pymobiledevice3 lockdown wifi-connections on
 
-   The iPhone must have a **passcode** set. The jitterbugpair file alone only
-   enables WiFi *debugging*, not WiFi *connections*; without this step the
-   WiFi backup cannot connect. (Verified: the key is `EnableWifiConnections`
-   in the `com.apple.mobile.wireless_lockdown` domain; jitterbugpair sets only
-   `EnableWifiDebugging`.)
+   (on Windows `pip install pymobiledevice3` needs the Microsoft C++ Build
+   Tools, so the checkbox is the easier way). The iPhone must have a
+   **passcode** set. A pairing record alone is not enough; without this step
+   the WiFi backup cannot connect. The key is `EnableWifiConnections` in the
+   `com.apple.mobile.wireless_lockdown` domain; jitterbugpair sets only
+   `EnableWifiDebugging`.
 
-Then, in the module: upload the `.mobiledevicepairing` file, enter the iPhone's
-WiFi IP address, optionally set a backup encryption password, and press
+Then, in the module: upload the pairing file, enter the iPhone's WiFi IP
+address, optionally set a backup encryption password, and press
 *Back up now*.
 
 ## Encryption password

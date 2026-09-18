@@ -244,7 +244,7 @@ export default {
       });
       const res = await to(this.createModuleTaskForApp(this.instanceName, {
         action: taskAction,
-        data: { content: this.upload.content, name: this.upload.name, ip: this.upload.ip, encryption_password: this.upload.encryption_password },
+        data: { content: this.upload.content, filename: this.upload.filename, name: this.upload.name, ip: this.upload.ip, encryption_password: this.upload.encryption_password },
         extra: { title: this.$t("action.upload-pairing"), description: this.$t("common.processing"), eventId },
       }));
       if (res[0]) { this.error.uploadPairing = this.getErrorMessage(res[0]); this.loading.uploadPairing = false; }

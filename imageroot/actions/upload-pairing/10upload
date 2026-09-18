@@ -5,9 +5,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# Store an uploaded pairing file. The user creates it on their own computer
-# with jitterbugpair (device on USB) and uploads it here; the file is a plist
-# pairing record with an added top-level "UDID" key. It is written to
+# Store an uploaded pairing file. Two sources are accepted:
+#  - the lockdown pairing record that iTunes / the Apple Devices app keeps on
+#    the user's computer (Windows: C:\ProgramData\Apple\Lockdown\<UDID>.plist,
+#    macOS: /var/db/lockdown/<UDID>.plist). It has no UDID key; the UDID is the
+#    file name, so the UI sends "filename" along.
+#  - a jitterbugpair file: the same plist with an added top-level "UDID" key.
+# It is written to
 # /var/lib/lockdown/<UDID>.plist inside the container, where libimobiledevice
 # expects pairing records, and the device is added to the registry.
 #
@@ -59,15 +63,19 @@ except Exception:
 try:
     pl = plistlib.loads(raw)
 except Exception:
-    print(agent.SD_ERR + "the uploaded file is not a valid property list (expected a jitterbugpair pairing file)", file=sys.stderr)
+    print(agent.SD_ERR + "the uploaded file is not a valid property list (expected a lockdown pairing record)", file=sys.stderr)
     sys.exit(2)
 
-udid = str(pl.get("UDID") or "").strip()
+udid = str(pl.get("UDID") or "").strip() or (data.get("udid") or "").strip()
 if not udid:
-    print(agent.SD_ERR + "the pairing file has no UDID key; use a file produced by jitterbugpair", file=sys.stderr)
+    # iTunes lockdown records carry the UDID only in the file name
+    fname = (data.get("filename") or "").strip().replace("\\", "/").split("/")[-1]
+    udid = re.sub(r"\.(plist|mobiledevicepairing)$", "", fname, flags=re.I)
+if not udid:
+    print(agent.SD_ERR + "the pairing file has no UDID key and no file name was given; upload <UDID>.plist unrenamed", file=sys.stderr)
     sys.exit(2)
 if not UDID_RE.match(udid):
-    print(agent.SD_ERR + f"the UDID '{udid}' has an unexpected format", file=sys.stderr)
+    print(agent.SD_ERR + f"'{udid}' is not a device UDID; the file must keep its original name <UDID>.plist", file=sys.stderr)
     sys.exit(2)
 for key in ("HostID", "SystemBUID", "HostCertificate", "DeviceCertificate"):
     if key not in pl:
