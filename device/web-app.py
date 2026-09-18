@@ -240,7 +240,8 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>{title}</title><style>
 :root{{color-scheme:light dark}}
 body{{margin:0;font:15px/1.5 system-ui,sans-serif;background:#f4f4f4;color:#161616}}
-.wrap{{max-width:52rem;margin:2rem auto;padding:0 1rem}}
+.wrap{{max-width:88rem;margin:1.5rem auto;padding:0 1.5rem}}
+.login{{max-width:26rem;margin:5vh auto}}
 .card{{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:1.25rem;margin-bottom:1rem}}
 h1{{font-size:1.25rem;margin:0}} h2{{font-size:1rem;margin:0 0 .75rem}}
 .top{{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}}
@@ -248,7 +249,8 @@ label{{display:block;font-size:.8rem;color:#525252;margin:.6rem 0 .2rem}}
 input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #8d8d8d;border-radius:4px;font-size:1rem;background:#fff;color:#161616}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
-table{{width:100%;border-collapse:collapse}} th,td{{text-align:left;padding:.5rem .5rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.9rem}}
+table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
+col.c-dev{{width:34%}} col.c-status{{width:26%}} col.c-mode{{width:14%}} col.c-act{{width:26%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
@@ -267,13 +269,14 @@ def render(body, refresh=False):
 def login_view(err=False):
     e = '<div class="err">Invalid username or password.</div>' if err else ""
     body = (
+        '<div class="login">'
         f'<div class="card"><h1>{esc(APP_TITLE)}</h1></div>'
         f'<div class="card">{e}<form method="post" action="/login">'
         f'<input type="hidden" name="csrf" value="{esc(csrf_token())}">'
         '<label for="u">Username</label><input id="u" name="username" autocomplete="username" autofocus>'
         '<label for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password">'
         '<div style="margin-top:1rem"><button type="submit">Log in</button></div></form>'
-        '<p class="muted">Use your organization account.</p></div>'
+        '<p class="muted">Use your organization account.</p></div></div>'
     )
     return render(body)
 
@@ -351,7 +354,7 @@ def devices_view():
   <form method="post" action="/logout"><input type="hidden" name="csrf" value="{tok}">
   <button class="sec">Log out</button></form></div>
 <div class="card"><h2>My devices</h2>
-<table><thead><tr><th>Device</th><th>Last backup</th><th>Mode</th><th>Actions</th></tr></thead>
+<table><colgroup><col class="c-dev"><col class="c-status"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>Device</th><th>Last backup</th><th>Mode</th><th>Actions</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <div class="card"><h2>Add a device</h2>
 <p class="muted">Create the pairing file on your computer with the iPhone on USB, enable WiFi lockdown once, then upload the file here. The device is registered to your account.</p>
