@@ -375,8 +375,8 @@ def devices_view():
   <div class="row">
     <div><label>Name</label><input name="name" placeholder="My iPhone"></div>
     <div><label>WiFi IP</label><input name="ip" placeholder="192.168.1.40"></div>
+    <div><label>Backup encryption password (optional)</label><input name="encryption_password" type="password" autocomplete="new-password"></div>
   </div>
-  <label>Backup encryption password (optional)</label><input name="encryption_password" type="password" autocomplete="new-password">
   <label>Pairing file (&lt;UDID&gt;.plist or .mobiledevicepairing)</label>
   <input type="file" name="pairing" accept=".plist,.mobiledevicepairing,application/xml,text/xml">
   <div style="margin-top:1rem"><button type="submit">Upload and add</button></div>
