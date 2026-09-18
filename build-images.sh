@@ -43,10 +43,14 @@ buildah run \
 
 buildah add "${container}" imageroot /imageroot
 buildah add "${container}" ui/dist /ui
-# No Traefik route and no node firewall service: the UI lives in the
-# cluster-admin and the engine reaches devices by outbound TCP only.
+# The cluster-admin UI needs no route, but the self-service web app does: it
+# demands one TCP port (published on the node loopback for Traefik) and the
+# routeadm authorization to publish/remove its Traefik route. The engine still
+# reaches devices by outbound TCP only.
 buildah config --entrypoint=/ \
     --label="org.nethserver.rootfull=0" \
+    --label="org.nethserver.tcp-ports-demand=1" \
+    --label="org.nethserver.authorizations=traefik@node:routeadm" \
     --label="org.nethserver.images=${runtime_images[*]}" \
     "${container}"
 buildah commit "${container}" "${repobase}/${reponame}"

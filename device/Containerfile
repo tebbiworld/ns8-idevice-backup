@@ -20,7 +20,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 RUN python3 -m venv /opt/pmd3 \
     && /opt/pmd3/bin/pip install --no-cache-dir --upgrade pip wheel \
     && /opt/pmd3/bin/pip install --no-cache-dir "pymobiledevice3==${PMD3_VERSION}" \
-    && /opt/pmd3/bin/python3 -c "import lzfse; from importlib.metadata import version; print('pmd3', version('pymobiledevice3'))"
+    && /opt/pmd3/bin/pip install --no-cache-dir flask==3.1.0 ldap3==2.9.1 waitress==3.0.2 \
+    && /opt/pmd3/bin/python3 -c "import lzfse, flask, ldap3, waitress; from importlib.metadata import version; print('pmd3', version('pymobiledevice3'))"
 
 FROM docker.io/library/debian:trixie-slim
 ARG PMD3_VERSION
@@ -35,6 +36,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 COPY --from=builder /opt/pmd3 /opt/pmd3
 COPY idevice-tool /usr/local/bin/idevice-tool
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY web-app.py /opt/web/app.py
 RUN chmod +x /usr/local/bin/idevice-tool /usr/local/bin/entrypoint.sh
 ENV PATH=/opt/pmd3/bin:$PATH \
     PMD3_VERSION=${PMD3_VERSION}

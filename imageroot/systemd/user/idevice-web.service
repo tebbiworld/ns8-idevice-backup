@@ -1,0 +1,41 @@
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Self-service web app (same image as the engine): LDAP-authenticated portal
+# where users manage their own device backups. Published on 127.0.0.1:${WEB_PORT}
+# and reverse-proxied by Traefik under ${SELFSERVICE_HOST}. Only started once a
+# self-service host name is configured.
+
+[Unit]
+Description=iOS Device Backup self-service web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+TimeoutStartSec=120
+TimeoutStopSec=20
+ExecStartPre=/bin/rm -f %t/idevice-web.pid %t/idevice-web.ctr-id
+ExecStart=/usr/bin/podman run \
+    --conmon-pidfile %t/idevice-web.pid \
+    --cidfile %t/idevice-web.ctr-id \
+    --cgroups=no-conmon \
+    --replace -d --name idevice-web \
+    --stop-timeout 15 \
+    --publish 127.0.0.1:${WEB_PORT}:8080 \
+    --env-file %S/state/ldap.env \
+    --env-file %S/state/web.env \
+    --entrypoint /opt/pmd3/bin/python3 \
+    ${IDEVICE_BACKUP_APP_IMAGE} /opt/web/app.py
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/idevice-web.ctr-id -t 15
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/idevice-web.ctr-id
+PIDFile=%t/idevice-web.pid
+Type=forking
+SyslogIdentifier=%u
+
+[Install]
+WantedBy=default.target

@@ -10,9 +10,19 @@
 # outbound TCP. Global options are applied by configure-module; the per-device
 # registry (state/devices.json) is created on the first upload.
 
+import os
+import secrets
+
 import agent
+
+tcp_ports = [p.strip() for p in os.environ.get("TCP_PORTS", "").split(",") if p.strip()]
+web_port = tcp_ports[0] if tcp_ports else "8080"
 
 agent.mset_env({
     "RETENTION": "3",
     "IDEVICE_INCLUDE_BACKUPS": "false",
+    "WEB_PORT": web_port,
+    "SESSION_SECRET": secrets.token_hex(32),
+    "SELFSERVICE_HOST": "",
+    "LDAP_ENABLED": "false",
 })

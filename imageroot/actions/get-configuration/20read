@@ -25,6 +25,14 @@ try:
 except Exception:
     pass
 
+web_running = False
+try:
+    ws = subprocess.run(["podman", "inspect", "idevice-web", "--format", "{{.State.Status}}"],
+                        capture_output=True, text=True, timeout=10).stdout.strip()
+    web_running = ws == "running"
+except Exception:
+    pass
+
 try:
     with open("devices.json") as fp:
         registry = json.load(fp)
@@ -71,6 +79,16 @@ for udid, d in sorted(registry.items(), key=lambda kv: kv[1].get("name", "")):
 config = {
     "retention": int(env.get("RETENTION", "3")),
     "include_backups": env.get("IDEVICE_INCLUDE_BACKUPS", "false").strip().lower() in ("1", "true", "yes", "on"),
+    "selfservice_host": env.get("SELFSERVICE_HOST", ""),
+    "selfservice_url": (f"https://{env.get('SELFSERVICE_HOST')}/" if env.get("SELFSERVICE_HOST") else ""),
+    "web_running": web_running,
+    "ldap_enabled": env.get("LDAP_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"),
+    "ldap_url": env.get("LDAP_URL", ""),
+    "ldap_base_dn": env.get("LDAP_BASE_DN", ""),
+    "ldap_bind_dn": env.get("LDAP_BIND_DN", ""),
+    "ldap_user_attribute": env.get("LDAP_USER_ATTRIBUTE", "sAMAccountName"),
+    "ldap_group": env.get("LDAP_GROUP", ""),
+    "ldap_bind_password_set": bool(env.get("LDAP_BIND_PASSWORD", "")),
     "container_running": running,
     "devices": devices,
 }

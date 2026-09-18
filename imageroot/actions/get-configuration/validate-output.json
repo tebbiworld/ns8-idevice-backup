@@ -62,6 +62,36 @@
         },
         "include_backups": {
             "type": "boolean"
+        },
+        "selfservice_host": {
+            "type": "string"
+        },
+        "selfservice_url": {
+            "type": "string"
+        },
+        "web_running": {
+            "type": "boolean"
+        },
+        "ldap_enabled": {
+            "type": "boolean"
+        },
+        "ldap_url": {
+            "type": "string"
+        },
+        "ldap_base_dn": {
+            "type": "string"
+        },
+        "ldap_bind_dn": {
+            "type": "string"
+        },
+        "ldap_user_attribute": {
+            "type": "string"
+        },
+        "ldap_group": {
+            "type": "string"
+        },
+        "ldap_bind_password_set": {
+            "type": "boolean"
         }
     }
 }

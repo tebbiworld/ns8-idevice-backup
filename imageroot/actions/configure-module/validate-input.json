@@ -22,6 +22,55 @@
             "type": "boolean",
             "title": "Include device backups in the NS8 backup",
             "description": "Add the (potentially large) device backups to this module's NS8 backup. Off by default; only pairing records and the registry are carried."
+        },
+        "selfservice_host": {
+            "type": "string",
+            "title": "Self-service host name (FQDN)",
+            "description": "FQDN for the user self-service portal, published through Traefik. Leave empty to disable the portal.",
+            "maxLength": 253
+        },
+        "http2https": {
+            "type": "boolean",
+            "title": "Redirect HTTP to HTTPS"
+        },
+        "lets_encrypt": {
+            "type": "boolean",
+            "title": "Request a Let's Encrypt certificate"
+        },
+        "ldap_enabled": {
+            "type": "boolean",
+            "title": "Enable LDAP/AD login for the portal"
+        },
+        "ldap_url": {
+            "type": "string",
+            "title": "LDAP URL",
+            "description": "e.g. ldaps://ad.example.org:636",
+            "maxLength": 253
+        },
+        "ldap_base_dn": {
+            "type": "string",
+            "title": "Base DN",
+            "maxLength": 512
+        },
+        "ldap_bind_dn": {
+            "type": "string",
+            "title": "Bind DN / service account",
+            "maxLength": 512
+        },
+        "ldap_bind_password": {
+            "type": "string",
+            "title": "Bind password",
+            "maxLength": 256
+        },
+        "ldap_user_attribute": {
+            "type": "string",
+            "title": "User login attribute",
+            "maxLength": 64
+        },
+        "ldap_group": {
+            "type": "string",
+            "title": "Restrict to group DN (optional)",
+            "maxLength": 512
         }
     }
 }
