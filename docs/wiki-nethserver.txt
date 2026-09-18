@@ -1,8 +1,6 @@
 ======iOS Device Backup======
 NethServer 8 module to back up iPhones and iPads over WiFi with no USB on the server, using [[https://github.com/doronz88/pymobiledevice3|pymobiledevice3]]. Pairing is done once on your own computer (USB); the pairing file is uploaded to the module, which then connects to the device by its IP address over the classic lockdown port (62078).
 
-<note>The end-to-end WiFi backup path is being validated against a physical device; treat it as unproven until a real backup has succeeded.</note>
-
 ====Announcement and talks====
 TBA
 
@@ -13,7 +11,8 @@ iOS Device Backup is a community application from the [[ns8:tebbiworld_repositor
   * connects to a device by explicit IP over classic lockdown TCP 62078 — no usbmux/netmuxd, no mDNS/Bonjour, works across subnet boundaries
   * upload a jitterbugpair pairing file, set the device IP and an optional backup encryption password
   * device-side encrypted backups, kept per device with a configurable retention
-  * NS8 backup includes the pairing records and the device registry (not the backups themselves by default)
+  * restore a snapshot back onto the device (same device, or a replacement device)
+  * NS8 backup optionally includes the device backups too (a toggle; off by default because they are large)
 
 =====Requirements=====
   * the server must reach the iPhone on TCP 62078 (route/allow from the server subnet to the WiFi subnet)
@@ -30,8 +29,29 @@ If set, device-side backup encryption is enabled on the first backup. iOS encryp
 =====Backup storage=====
 Backups are stored in the ''idevice-data'' volume (''%%/data/backups/<UDID>/<timestamp>%%''). The NS8 backup carries the pairing records and registry, not the device backups themselves by default (they can be large); add ''volumes/idevice-data'' to the include file to change that.
 
+=====Restore to the same device=====
+Restoring **overwrites** the device with a snapshot and reboots it. On the device first turn **Find My iPhone off** (Settings → your name → Find My → Find My iPhone), otherwise iOS refuses to erase and restore. Keep the device unlocked, on power and on WiFi, and confirm the passcode prompt. An encrypted snapshot is restored with the password the module stored for the device.
+
+Trigger it from the leader node with a snapshot name from ''list-backups'':
+
+<code bash>
+api-cli run module/idevice-backup1/restore-backup --data '{"udid":"<UDID>","snapshot":"2026-09-18_07-16-00"}'
+</code>
+
+=====If the device is lost or broken (restore to a new iPhone)=====
+The snapshot on the server is a normal iOS backup, so a replacement device is covered — **provided two things survive**: the backup files and the encryption password.
+
+  * **The password.** An encrypted backup is worthless without it. Note it somewhere off the server; it is kept in the module state (''state/devices.json'', node-admin readable).
+  * **The backup files.** They live in the ''idevice-data'' volume and are **not** in the NS8 backup unless you turn that on (see below) — a dead node then loses them. Turn the include on, or copy the volume off the node.
+
+Two ways to bring a snapshot onto a new iPhone:
+  - **Apple's own flow (most robust).** Copy the innermost backup folder (the one holding ''Manifest.plist'') from ''%%/home/idevice-backup1/.local/share/containers/storage/volumes/idevice-data/_data/backups/<UDID>/<snapshot>/<UDID>/%%'' to the Finder/iTunes backup folder (macOS ''%%~/Library/Application Support/MobileSync/Backup/%%'', Windows <nowiki>%APPDATA%\Apple\MobileSync\Backup</nowiki>), then during **Set Up** the new iPhone choose *Restore from Mac or PC* and enter the backup password.
+  - **Through the module.** Pair the new device, then restore the old device's snapshot onto it (a cross-device restore). Apple restores an encrypted backup only to a device set up for it, and some data is device-bound.
+
+=====Backup into the NS8 backup=====
+The **Include device backups in the NS8 backup** switch adds the ''idevice-data'' volume to the module's NS8 (restic) backup. Off by default: the backups can be many GB per device and would roughly double the NS8 backup size. With it off, only the pairing records and the device registry are carried, so protect the backups separately (copy off the node, or turn the switch on).
+
 =====Limitations=====
-  * not yet verified end-to-end against a physical device
   * WiFi lockdown must be enabled on the device (most common connection failure)
   * DHCP: update the device IP if it changes (a static reservation is recommended)
   * pairing can expire (re-pair and re-upload)
