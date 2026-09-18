@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 — 2026-09-18
+
+- Self-service how-to now tells users to give the iPhone a fixed IP and turn
+  Private Wi-Fi Address off, so its address stays reachable.
+- Self-service layout polish (column widths for wide screens).
+- The update hook now restarts the self-service web app too, so an update
+  reaches it and not only the engine.
+
 ## 1.2.0 — 2026-09-18
 
 - **Self-service portal.** A second web surface (own FQDN, or a path such as
