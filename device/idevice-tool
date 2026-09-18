@@ -11,6 +11,8 @@
 #
 # Subcommands:
 #   ping   --udid U --ip A            connectivity + device info
+#   restore --udid U --ip A --dir D   restore snapshot dir D back onto the device
+#                                     (destructive; IDEVICE_RESTORE_PASSWORD if encrypted)
 #   backup --udid U --ip A --dir D    full backup into D; set encryption from
 #                                      $IDEVICE_SET_PASSWORD when --set-password
 #
@@ -134,6 +136,36 @@ async def cmd_backup(args):
     print(json.dumps({"ok": True, "dir": args.dir, "encryption_enabled": enabled_encryption}))
 
 
+async def cmd_restore(args):
+    # Restore a backup snapshot back ONTO the device. Destructive: it overwrites
+    # the iPhone/iPad with the backup and reboots it. The snapshot directory is
+    # the one that holds the "<udid>" backup folder (i.e. /data/backups/<udid>/<ts>).
+    # An encrypted backup needs its password (env IDEVICE_RESTORE_PASSWORD).
+    from pymobiledevice3.services.mobilebackup2 import Mobilebackup2Service
+    ld, hb = await connect(args.udid, args.ip)
+    pw = os.environ.get("IDEVICE_RESTORE_PASSWORD", "")
+    progress_file = os.path.join(os.path.dirname(args.dir.rstrip("/")), ".progress")
+    last = [-1]
+
+    def on_progress(pct):
+        try:
+            p = int(float(pct))
+        except (TypeError, ValueError):
+            return
+        if p != last[0]:
+            last[0] = p
+            with open(progress_file, "w") as fp:
+                fp.write(f"{p}\n")
+
+    async with Mobilebackup2Service(ld) as svc:
+        # copy=True: keep the on-disk backup; settings/reboot at defaults so the
+        # device comes back up configured. password is required iff encrypted.
+        await svc.restore(backup_directory=args.dir, password=pw,
+                          copy=True, reboot=True, progress_callback=on_progress)
+    hb.cancel()
+    print(json.dumps({"ok": True, "dir": args.dir, "restored": True}))
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -145,9 +177,14 @@ def main():
     b.add_argument("--ip", required=True)
     b.add_argument("--dir", required=True)
     b.add_argument("--set-password", action="store_true")
+    r = sub.add_parser("restore")
+    r.add_argument("--udid", required=True)
+    r.add_argument("--ip", required=True)
+    r.add_argument("--dir", required=True)
     args = ap.parse_args()
     try:
-        asyncio.run(cmd_ping(args) if args.cmd == "ping" else cmd_backup(args))
+        dispatch = {"ping": cmd_ping, "backup": cmd_backup, "restore": cmd_restore}
+        asyncio.run(dispatch[args.cmd](args))
     except Exception as e:
         if os.environ.get("IDEVICE_DEBUG"):
             import traceback

@@ -1,0 +1,12 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "restore-backup output",
+    "$id": "http://nethserver.org/json-schema/task/output/idevice-backup/restore-backup",
+    "description": "Restore result",
+    "type": "object",
+    "properties": {
+        "udid": { "type": "string" },
+        "snapshot": { "type": "string" },
+        "status": { "type": "string" }
+    }
+}

@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Restore one stored snapshot back ONTO a device. DESTRUCTIVE: it overwrites the
+# iPhone/iPad with the backup and reboots it. Connects by the device IP through
+# the engine container (idevice-tool restore); an encrypted backup uses the
+# stored (or supplied) encryption password.
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+import agent
+
+CONTAINER = "idevice-backup"
+UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
+SNAP_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+
+
+def load_devices():
+    try:
+        with open("devices.json") as fp:
+            return json.load(fp)
+    except FileNotFoundError:
+        return {}
+
+
+data = json.load(sys.stdin)
+udid = str(data["udid"]).strip()
+snapshot = str(data.get("snapshot") or "").strip()
+if not UDID_RE.match(udid):
+    print(agent.SD_ERR + "invalid UDID", file=sys.stderr)
+    sys.exit(2)
+if not SNAP_RE.match(snapshot):
+    print(agent.SD_ERR + "invalid or missing snapshot name", file=sys.stderr)
+    sys.exit(2)
+
+devices = load_devices()
+dev = devices.get(udid)
+if not dev:
+    print(agent.SD_ERR + "unknown device", file=sys.stderr)
+    sys.exit(2)
+ip = (dev.get("ip") or "").strip()
+if not ip:
+    print(agent.SD_ERR + "set the device WiFi IP address first", file=sys.stderr)
+    sys.exit(2)
+
+dest = f"/data/backups/{udid}/{snapshot}"
+# the snapshot must exist and hold the <udid> backup folder
+check = subprocess.run(["podman", "exec", CONTAINER, "sh", "-c",
+                        f"test -d '{dest}/{udid}' && echo ok"], capture_output=True, text=True)
+if "ok" not in check.stdout:
+    print(agent.SD_ERR + f"snapshot '{snapshot}' not found for this device", file=sys.stderr)
+    sys.exit(2)
+
+enc_pw = (data.get("encryption_password") or dev.get("encryption_password") or "")
+
+cmd = ["podman", "exec"]
+if enc_pw:
+    cmd += ["-e", "IDEVICE_RESTORE_PASSWORD=" + enc_pw]
+cmd += [CONTAINER, "idevice-tool", "restore", "--udid", udid, "--ip", ip, "--dir", dest]
+
+print(agent.SD_INFO + f"restoring {dev.get('name', udid)} from {snapshot} (the device is overwritten and reboots)", file=sys.stderr)
+proc = subprocess.run(cmd, capture_output=True, text=True)
+out = (proc.stdout or "").strip().splitlines()
+result = {}
+for line in reversed(out):
+    line = line.strip()
+    if line.startswith("{"):
+        try:
+            result = json.loads(line)
+            break
+        except Exception:
+            pass
+
+if proc.returncode != 0 or not result.get("ok"):
+    etype = result.get("type") or ""
+    err = result.get("error") or etype or (proc.stderr or "").strip()[-500:] or "restore failed"
+    if etype in ("TimeoutError", "ConnectionRefusedError", "OSError", "ConnectionError"):
+        err = (f"could not reach the device at {ip}:62078 ({etype}). Check the IP address, "
+               f"that WiFi lockdown is enabled on the device, and that the server can route to it.")
+    elif etype == "ConnectionTerminatedError":
+        err = ("the device closed the connection (ConnectionTerminatedError). Unlock the iPhone, keep it "
+               "awake and confirm the restore prompt on the device, then try again.")
+    print(agent.SD_ERR + "restore failed: " + err, file=sys.stderr)
+    sys.exit(1)
+
+json.dump({"udid": udid, "snapshot": snapshot, "status": "ok"}, fp=sys.stdout)

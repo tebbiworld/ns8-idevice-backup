@@ -81,14 +81,23 @@ if it is lost, the encrypted backup cannot be restored.
 
 ## Restore to a device
 
-Restoring an iOS backup to a device is an `idevicebackup2 restore` /
-`mobilebackup2` operation that must run against the target device (encrypted
-backups need the backup password). This module currently focuses on **taking**
-backups; restoring is done manually from the stored backup directory against
-the device. The device must trust the host (a valid pairing) and, for an
-encrypted backup, you need the encryption password. Restoring to a *different*
-device is limited by Apple: an encrypted backup restores only to a device set
-up for it, and some data is device-bound.
+Restoring writes a stored snapshot back **onto** the device and reboots it, so it
+overwrites the current contents of that iPhone/iPad. Trigger it from the leader
+node with the snapshot name from *list-backups*:
+
+    api-cli run module/idevice-backup1/restore-backup --data '{"udid":"<UDID>","snapshot":"2026-09-18_07-16-00"}'
+
+The device must be reachable on WiFi (pairing valid, WiFi lockdown on) exactly as
+for a backup, and you confirm the restore prompt on the device. An encrypted
+backup is restored with its password automatically (the one stored for the
+device); pass `encryption_password` to override it. Apple restores an encrypted
+backup only to a device set up for it, and some data is device-bound.
+
+The same operation is available inside the engine container:
+
+    podman exec [-e IDEVICE_RESTORE_PASSWORD=...] idevice-backup \
+        idevice-tool restore --udid <UDID> --ip <device-ip> \
+        --dir /data/backups/<UDID>/<snapshot>
 
 ## Limitations and things to watch
 
