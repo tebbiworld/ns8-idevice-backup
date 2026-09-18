@@ -250,10 +250,11 @@ h1{{font-size:1.25rem;margin:0}} h2{{font-size:1rem;margin:0 0 .75rem}}
 label{{display:block;font-size:.8rem;color:#525252;margin:.6rem 0 .2rem}}
 input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #8d8d8d;border-radius:4px;font-size:1rem;background:#fff;color:#161616}}
 .ip-in{{width:9rem}} .mode-sel{{width:auto;min-width:8.5rem}}
+.iprow{{display:flex;gap:.5rem;align-items:center}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:32%}} col.c-status{{width:22%}} col.c-mode{{width:16%}} col.c-act{{width:30%}}
+col.c-dev{{width:36%}} col.c-status{{width:15%}} col.c-mode{{width:14%}} col.c-act{{width:35%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
@@ -338,10 +339,10 @@ def devices_view():
         disabled = "disabled" if d["running"] else ""
         rows += f"""<tr>
 <td><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div>
-  <form method="post" action="{u_ip}" class="row" style="margin-top:.4rem">
+  <form method="post" action="{u_ip}" class="iprow" style="margin-top:.4rem">
     <input type="hidden" name="csrf" value="{tok}">
-    <div><input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP"></div>
-    <div style="flex:0"><button class="sec" {disabled}>Save IP</button></div></form></td>
+    <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP">
+    <button class="sec" {disabled}>Save IP</button></form></td>
 <td>{status}<div style="margin-top:.3rem">{snap_html}</div></td>
 <td>enc {enc}
   <form method="post" action="{u_mode}" style="margin-top:.3rem">
