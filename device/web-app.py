@@ -253,15 +253,15 @@ input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #
 .iprow button{{white-space:nowrap}}
 .iprow{{display:flex;gap:.5rem;align-items:center}}
 .snaprow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap}}
-.moderow{{display:flex;gap:.5rem;align-items:center}} .snap-sel{{width:13rem;min-width:0;max-width:100%}}
+.moderow{{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap;white-space:nowrap}} .snap-sel{{width:13rem;min-width:0;max-width:100%}}
 .act-cell{{text-align:right}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:14%}} col.c-ip{{width:12%}} col.c-last{{width:11%}} col.c-snap{{width:27%}} col.c-mode{{width:10%}} col.c-act{{width:26%}}
+col.c-dev{{width:14%}} col.c-ip{{width:15%}} col.c-last{{width:13%}} col.c-snap{{width:22%}} col.c-mode{{width:13%}} col.c-act{{width:23%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
-.row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
+.row{{display:flex;gap:.75rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}} .row>div.sm{{flex:0 1 13rem}}
 .err{{background:#fff1f1;border:1px solid #da1e28;color:#a2191f;padding:.6rem;border-radius:4px;margin-bottom:1rem}}
 .actbtns{{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}} form{{margin:0}}
 @media (prefers-color-scheme:dark){{body{{background:#161616;color:#f4f4f4}}.card{{background:#262626;border-color:#393939}}input,select{{background:#161616;color:#f4f4f4;border-color:#6f6f6f}}}}
@@ -378,12 +378,11 @@ def devices_view():
 <form method="post" action="{add_url}" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{tok}">
   <div class="row">
-    <div><label>Name</label><input name="name" placeholder="My iPhone"></div>
-    <div><label>WiFi IP</label><input name="ip" placeholder="192.168.1.40"></div>
+    <div class="sm"><label>Name</label><input name="name" placeholder="My iPhone"></div>
+    <div class="sm"><label>WiFi IP</label><input name="ip" placeholder="192.168.1.40"></div>
     <div><label>Backup encryption password (optional)</label><input name="encryption_password" type="password" autocomplete="new-password"></div>
+    <div><label>Pairing file (&lt;UDID&gt;.plist or .mobiledevicepairing)</label><input type="file" name="pairing" accept=".plist,.mobiledevicepairing,application/xml,text/xml"></div>
   </div>
-  <label>Pairing file (&lt;UDID&gt;.plist or .mobiledevicepairing)</label>
-  <input type="file" name="pairing" accept=".plist,.mobiledevicepairing,application/xml,text/xml">
   <div style="margin-top:1rem"><button type="submit">Upload and add</button></div>
 </form></div>"""
     return render(body, refresh=any_running)
