@@ -96,10 +96,17 @@ write_envfile("ldap.env", {
     "LDAP_USER_ATTRIBUTE": ldap_user_attribute,
     "LDAP_GROUP": ldap_group,
 })
+selfservice_restore = bool(data.get("selfservice_restore", True))
+agent.set_env("SELFSERVICE_RESTORE", "true" if selfservice_restore else "false")
+ldap_domain = (data.get("ldap_domain") or "").strip()
+agent.set_env("LDAP_DOMAIN", ldap_domain)
 write_envfile("web.env", {
     "SESSION_SECRET": env.get("SESSION_SECRET", ""),
     "APP_TITLE": "iOS Device Backup",
     "WEB_INTERNAL_PORT": "8080",
+    "STATE_DIR": "/state",
+    "LDAP_DOMAIN": ldap_domain,
+    "SELFSERVICE_RESTORE": "true" if selfservice_restore else "false",
 })
 
 # Traefik route for the self-service host

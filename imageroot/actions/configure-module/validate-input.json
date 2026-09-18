@@ -71,6 +71,15 @@
             "type": "string",
             "title": "Restrict to group DN (optional)",
             "maxLength": 512
+        },
+        "selfservice_restore": {
+            "type": "boolean",
+            "title": "Allow users to restore their own devices"
+        },
+        "ldap_domain": {
+            "type": "string",
+            "title": "Owner user domain label",
+            "maxLength": 253
         }
     }
 }

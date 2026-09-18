@@ -89,6 +89,8 @@ config = {
     "ldap_user_attribute": env.get("LDAP_USER_ATTRIBUTE", "sAMAccountName"),
     "ldap_group": env.get("LDAP_GROUP", ""),
     "ldap_bind_password_set": bool(env.get("LDAP_BIND_PASSWORD", "")),
+    "selfservice_restore": env.get("SELFSERVICE_RESTORE", "true").strip().lower() in ("1","true","yes","on"),
+    "ldap_domain": env.get("LDAP_DOMAIN", ""),
     "container_running": running,
     "devices": devices,
 }

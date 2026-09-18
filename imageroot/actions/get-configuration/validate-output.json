@@ -92,6 +92,12 @@
         },
         "ldap_bind_password_set": {
             "type": "boolean"
+        },
+        "selfservice_restore": {
+            "type": "boolean"
+        },
+        "ldap_domain": {
+            "type": "string"
         }
     }
 }

@@ -27,6 +27,10 @@ ExecStart=/usr/bin/podman run \
     --replace -d --name idevice-web \
     --stop-timeout 15 \
     --publish 127.0.0.1:${WEB_PORT}:8080 \
+    --volume idevice-lockdown:/var/lib/lockdown \
+    --volume idevice-data:/data \
+    --volume %S/state:/state:z \
+    --env STATE_DIR=/state \
     --env-file %S/state/ldap.env \
     --env-file %S/state/web.env \
     --entrypoint /opt/pmd3/bin/python3 \
