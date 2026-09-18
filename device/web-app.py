@@ -251,15 +251,17 @@ label{{display:block;font-size:.8rem;color:#525252;margin:.6rem 0 .2rem}}
 input,select{{width:100%;box-sizing:border-box;padding:.55rem;border:1px solid #8d8d8d;border-radius:4px;font-size:1rem;background:#fff;color:#161616}}
 .ip-in{{width:9rem}} .mode-sel{{width:auto;min-width:8.5rem}}
 .iprow{{display:flex;gap:.5rem;align-items:center}}
+.snaprow{{display:flex;gap:.5rem;align-items:center;margin-top:.3rem}} .snap-sel{{width:auto;min-width:9rem;max-width:12rem}}
+.act-cell{{text-align:right}}
 button{{padding:.5rem 1rem;border:0;border-radius:4px;background:#0f62fe;color:#fff;font-size:.95rem;cursor:pointer}}
 button.sec{{background:#393939}} button.danger{{background:#da1e28}}
 table{{width:100%;border-collapse:collapse;table-layout:fixed}} th,td{{text-align:left;padding:.6rem .75rem;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:.92rem}}
-col.c-dev{{width:26%}} col.c-last{{width:12%}} col.c-snap{{width:22%}} col.c-mode{{width:12%}} col.c-act{{width:28%}}
+col.c-dev{{width:19%}} col.c-ip{{width:14%}} col.c-last{{width:11%}} col.c-snap{{width:22%}} col.c-mode{{width:11%}} col.c-act{{width:23%}}
 .udid{{font-family:monospace;font-size:.72rem;color:#6f6f6f}}
 .ok{{color:#24a148;font-weight:600}}.bad{{color:#da1e28;font-weight:600}}.muted{{color:#6f6f6f;font-size:.85rem}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}}
 .err{{background:#fff1f1;border:1px solid #da1e28;color:#a2191f;padding:.6rem;border-radius:4px;margin-bottom:1rem}}
-.actbtns{{display:flex;gap:.4rem;flex-wrap:wrap}} form{{margin:0}}
+.actbtns{{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}} form{{margin:0}}
 @media (prefers-color-scheme:dark){{body{{background:#161616;color:#f4f4f4}}.card{{background:#262626;border-color:#393939}}input,select{{background:#161616;color:#f4f4f4;border-color:#6f6f6f}}}}
 </style></head><body><div class="wrap">{body}
 <p class="muted" style="text-align:center">iOS Device Backup — self service</p></div></body></html>"""
@@ -338,8 +340,8 @@ def devices_view():
         enc = "✓" if (d.get("encryption") or d.get("encryption_password_set") or d.get("encryption_password")) else "—"
         disabled = "disabled" if d["running"] else ""
         rows += f"""<tr>
-<td><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div>
-  <form method="post" action="{u_ip}" class="iprow" style="margin-top:.4rem">
+<td><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div></td>
+<td><form method="post" action="{u_ip}" class="iprow">
     <input type="hidden" name="csrf" value="{tok}">
     <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="WiFi IP">
     <button class="sec" {disabled}>Save IP</button></form></td>
@@ -352,7 +354,7 @@ def devices_view():
       <option value="full" {'selected' if (d.get('backup_mode') or 'full')=='full' else ''}>Full</option>
       <option value="incremental" {'selected' if d.get('backup_mode')=='incremental' else ''}>Incremental</option>
     </select></form></td>
-<td><div class="actbtns">
+<td class="act-cell"><div class="actbtns">
   <form method="post" action="{u_backup}"><input type="hidden" name="csrf" value="{tok}">
     <button {disabled}>Back up now</button></form>
   <form method="post" action="{u_delete}" onsubmit="return confirm('Remove this device from the list?');">
@@ -360,14 +362,14 @@ def devices_view():
 </div></td></tr>"""
 
     if not devs:
-        rows = '<tr><td colspan="5" class="muted">No devices yet. Add one below.</td></tr>'
+        rows = '<tr><td colspan="6" class="muted">No devices yet. Add one below.</td></tr>'
 
     body = f"""
 <div class="top"><h1>Hello, {disp}</h1>
   <form method="post" action="{logout_url}"><input type="hidden" name="csrf" value="{tok}">
   <button class="sec">Log out</button></form></div>
 <div class="card"><h2>My devices</h2>
-<table><colgroup><col class="c-dev"><col class="c-last"><col class="c-snap"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>Device</th><th>Last backup</th><th>Available snapshots</th><th>Mode</th><th>Actions</th></tr></thead>
+<table><colgroup><col class="c-dev"><col class="c-ip"><col class="c-last"><col class="c-snap"><col class="c-mode"><col class="c-act"></colgroup><thead><tr><th>Device</th><th>IP</th><th>Last backup</th><th>Available snapshots</th><th>Mode</th><th class="act-cell">Actions</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <div class="card"><h2>Add a device</h2>
 <p class="muted">Create the pairing file on your computer with the iPhone on USB, enable WiFi lockdown once, then upload the file here. The device is registered to your account.</p>
