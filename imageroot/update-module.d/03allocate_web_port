@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Instances installed before 1.2.0 were created when the image did not demand a
+# TCP port yet: the node never allocated one, and the self-service portal ended
+# up on a port the node may hand out again to the next module. Allocate a proper
+# port for them (needs node:portsadm) and move the portal and its route to it.
+
+import os
+import sys
+
+import agent
+import agent.tasks
+
+env = agent.read_envfile(os.path.join(os.environ["AGENT_STATE_DIR"], "environment"))
+if env.get("TCP_PORT") or env.get("TCP_PORTS"):
+    sys.exit(0)  # the node allocated the port at install time
+
+try:
+    ports = agent.allocate_ports(1, "tcp", keep_existing=True)
+except Exception as exc:
+    print(agent.SD_WARNING + f"cannot allocate a TCP port for the self-service portal: {exc}", file=sys.stderr)
+    sys.exit(0)
+if not ports:
+    print(agent.SD_WARNING + "the node did not return a TCP port for the self-service portal", file=sys.stderr)
+    sys.exit(0)
+
+port = str(ports[0])
+agent.mset_env({"TCP_PORT": port, "TCP_PORTS": port, "WEB_PORT": port})
+print(f"self-service portal moved from port {env.get('WEB_PORT', '?')} to the allocated port {port}", file=sys.stderr)
+
+if env.get("SELFSERVICE_HOST"):
+    # re-apply the configuration so the Traefik route follows the new port
+    os.environ["WEB_PORT"] = port
+    response = agent.tasks.run(agent_id=os.environ["AGENT_ID"], action="configure-module", data={})
+    if response["exit_code"] != 0:
+        print(agent.SD_WARNING + "configure-module failed after the port change: save the settings once from the UI", file=sys.stderr)
