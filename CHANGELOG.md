@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 — 2026-09-19
+
+Alignment with the NethServer module conventions (NethServer/agents skills).
+
+### Changed
+
+- **Secrets moved out of the module environment.** The session secret of the self-service portal and the LDAP bind password are now kept in `state/passwords.env` (mode 0600) instead of `state/environment`, which NS8 mirrors to Redis in plain text. Existing installations are migrated on update; the values do not change. The generated `ldap.env` and `web.env` are private (0600).
+- **Restore brings the whole configuration back.** `restore-module` only re-applied the retention; it now restores every setting: automatic backups, the self-service portal with its route and the directory login. The backup includes the secrets file.
+
+### Added
+
+- Robot Framework tests (install, update from the previous release, backup and restore) run on real NS8 nodes through `stephdl/ns8-ci-actions`.
+
 ## 1.2.3 — 2026-09-18
 
 - **Automatic backups.** A per-instance schedule backs up devices without anyone
