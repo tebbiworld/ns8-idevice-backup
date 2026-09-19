@@ -47,11 +47,13 @@ buildah add "${container}" ui/dist /ui
 # demands one TCP port (published on the node loopback for Traefik) and the
 # routeadm authorization to publish/remove its Traefik route. The engine still
 # reaches devices by outbound TCP only.
+# The bulk-data volumes can be placed on an additional disk at install time.
 buildah config --entrypoint=/ \
     --label="org.nethserver.rootfull=0" \
     --label="org.nethserver.tcp-ports-demand=1" \
-    --label="org.nethserver.authorizations=traefik@node:routeadm" \
+    --label="org.nethserver.authorizations=traefik@node:routeadm node:portsadm" \
     --label="org.nethserver.images=${runtime_images[*]}" \
+    --label="org.nethserver.volumes=idevice-data" \
     "${container}"
 buildah commit "${container}" "${repobase}/${reponame}"
 
