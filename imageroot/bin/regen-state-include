@@ -16,6 +16,7 @@ BASE = [
     "# Always carried: the pairing records and the device registry (small, critical).",
     "#",
     "state/environment",
+    "state/passwords.env",
     "state/devices.json",
     "volumes/idevice-lockdown",
 ]

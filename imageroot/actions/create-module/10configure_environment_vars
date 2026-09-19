@@ -11,7 +11,6 @@
 # registry (state/devices.json) is created on the first upload.
 
 import os
-import secrets
 
 import agent
 
@@ -22,7 +21,6 @@ agent.mset_env({
     "RETENTION": "3",
     "IDEVICE_INCLUDE_BACKUPS": "false",
     "WEB_PORT": web_port,
-    "SESSION_SECRET": secrets.token_hex(32),
     "SELFSERVICE_HOST": "",
     "LDAP_ENABLED": "false",
     "AUTOBACKUP_ENABLED": "false",
