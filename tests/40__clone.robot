@@ -12,8 +12,8 @@ Clone the module
     Should Not Be Equal    ${clone_id}    ${module_id}
 
 The clone has its route, settings and secrets
-    ${orig} =    Run task    module/traefik1/get-route    {"instance":"${module_id}"}
-    ${route} =    Run task    module/traefik1/get-route    {"instance":"${clone_id}"}
+    ${orig} =    Run task    module/traefik1/get-route    {"instance":"${module_id}-web"}
+    ${route} =    Run task    module/traefik1/get-route    {"instance":"${clone_id}-web"}
     Should Be Equal    ${route['host']}    ${orig['host']}
     Should Not Be Equal    ${route['url']}    ${orig['url']}
     # only values that are set count: configure-module may add empty entries
