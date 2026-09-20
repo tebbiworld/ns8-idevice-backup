@@ -5,8 +5,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# List the stored backup snapshots of one device (timestamped directories under
-# /data/backups/<udid>), newest first, with their size.
+# List the stored backup snapshots of one device (directories under
+# /data/backups/<udid>), newest first, with their size. "complete" is false for
+# a backup the device has not finished: it is kept to be continued, it cannot
+# be restored and it does not count towards the retention.
 
 import json
 import re
@@ -35,5 +37,13 @@ try:
             backups.append({"snapshot": name.strip(), "size_mb": int(size) if size.strip().isdigit() else 0})
 except Exception:
     pass
+try:
+    out = subprocess.run(["podman", "exec", CONTAINER, "idevice-tool", "snapshots", "--udid", udid,
+                          "--base", f"/data/backups/{udid}"], capture_output=True, text=True, timeout=30).stdout
+    complete = {x["snapshot"]: bool(x["complete"]) for x in json.loads(out.strip().splitlines()[-1])["snapshots"]}
+except Exception:
+    complete = {}
+for b in backups:
+    b["complete"] = complete.get(b["snapshot"], True)
 backups.sort(key=lambda b: b["snapshot"], reverse=True)
 json.dump({"udid": udid, "backups": backups}, fp=sys.stdout)

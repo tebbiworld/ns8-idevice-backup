@@ -56,6 +56,36 @@
                     },
                     "domain": {
                         "type": "string"
+                    },
+                    "incomplete_count": {
+                        "type": "integer",
+                        "title": "Unfinished snapshots, kept to be continued; they do not count as backups"
+                    },
+                    "running": {
+                        "type": "boolean",
+                        "title": "A backup or restore of this device is running, whoever started it"
+                    },
+                    "run_state": {
+                        "type": "string",
+                        "enum": [
+                            "idle",
+                            "running",
+                            "waiting",
+                            "restoring"
+                        ],
+                        "title": "waiting = pause before the next attempt after a lost connection"
+                    },
+                    "progress": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "title": "Percentage reported by the device for the running backup"
+                    },
+                    "attempt": {
+                        "type": "integer"
+                    },
+                    "attempts": {
+                        "type": "integer"
                     }
                 }
             }

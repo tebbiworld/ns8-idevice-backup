@@ -6,8 +6,10 @@
 #
 
 # Run a backup of one device: connect by its IP through the engine container
-# (idevice-tool, pymobiledevice3) and store a timestamped snapshot in the
-# idevice-data volume, then prune snapshots beyond the retention count.
+# (idevice-tool, pymobiledevice3). The tool picks the snapshot (a new time
+# stamp, the unfinished one to continue, or the incremental directory), retries
+# when the connection drops, reports the percentage and prunes finished
+# snapshots beyond the retention count.
 
 import json
 import os
@@ -17,24 +19,10 @@ import sys
 import time
 
 import agent
+import devreg
 
 CONTAINER = "idevice-backup"
 UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
-
-
-def load_devices():
-    try:
-        with open("devices.json") as fp:
-            return json.load(fp)
-    except FileNotFoundError:
-        return {}
-
-
-def save_devices(devices):
-    with open("devices.json.tmp", "w") as fp:
-        json.dump(devices, fp, indent=2)
-    os.replace("devices.json.tmp", "devices.json")
-
 
 data = json.load(sys.stdin)
 udid = str(data["udid"]).strip()
@@ -42,8 +30,7 @@ if not UDID_RE.match(udid):
     print(agent.SD_ERR + "invalid UDID", file=sys.stderr)
     sys.exit(2)
 
-devices = load_devices()
-dev = devices.get(udid)
+dev = devreg.load_devices().get(udid)
 if not dev:
     print(agent.SD_ERR + "unknown device", file=sys.stderr)
     sys.exit(2)
@@ -53,79 +40,82 @@ if not ip:
     sys.exit(2)
 
 retention = int(os.environ.get("RETENTION", "3"))
-mode = (dev.get("backup_mode") or "full").strip().lower()
-incremental = mode == "incremental"
-if incremental:
-    # one persistent backup per device that mobilebackup2 updates in place
-    ts = "incremental"
-    dest = f"/data/backups/{udid}/incremental"
-else:
-    ts = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-    dest = f"/data/backups/{udid}/{ts}"
-
-enc_pw = dev.get("encryption_password") or ""
-set_encryption = bool(enc_pw)  # the engine skips it if the device is already encrypted
+mode = "incremental" if (dev.get("backup_mode") or "full").strip().lower() == "incremental" else "full"
+name = dev.get("name", udid)
 
 cmd = ["podman", "exec"]
 env = os.environ.copy()
-if set_encryption:
-    cmd += ["-e", "IDEVICE_SET_PASSWORD=" + enc_pw]
-cmd += [CONTAINER, "idevice-tool", "backup", "--udid", udid, "--ip", ip, "--dir", dest]
-if set_encryption:
+enc_pw = devreg.get_password(udid)
+if enc_pw:
+    # value-less --env: podman takes it from our environment, so the password
+    # never shows up in a process list. The engine skips it if the device is
+    # already encrypted.
+    env["IDEVICE_SET_PASSWORD"] = enc_pw
+    cmd += ["--env", "IDEVICE_SET_PASSWORD"]
+cmd += [CONTAINER, "idevice-tool", "backup", "--udid", udid, "--ip", ip,
+        "--base", f"/data/backups/{udid}", "--mode", mode,
+        "--retention", str(retention), "--progress-events"]
+if enc_pw:
     cmd += ["--set-password"]
-if incremental:
-    cmd += ["--incremental"]
 
-print(agent.SD_INFO + f"starting backup of {dev.get('name', udid)} at {ip} into {dest}", file=sys.stderr)
-proc = subprocess.run(cmd, capture_output=True, text=True)
-out = (proc.stdout or "").strip().splitlines()
+print(agent.SD_INFO + f"starting {mode} backup of {name} at {ip}", file=sys.stderr)
+proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
 result = {}
-for line in reversed(out):
+noise = []
+for line in proc.stdout:
     line = line.strip()
-    if line.startswith("{"):
-        try:
-            result = json.loads(line)
-            break
-        except Exception:
-            pass
+    if not line.startswith("{"):
+        if line:
+            noise = (noise + [line])[-10:]
+        continue
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        continue
+    event = msg.get("event")
+    if event == "progress":
+        agent.set_progress(min(99, int(msg.get("percent") or 0)))
+    elif event == "attempt":
+        how = "continuing" if msg.get("resumed") else "starting"
+        print(agent.SD_INFO + f"{name}: attempt {msg.get('attempt')}/{msg.get('attempts')}, {how} snapshot {msg.get('snapshot')}", file=sys.stderr)
+    elif event == "retry":
+        print(agent.SD_WARNING + f"{name}: attempt {msg.get('attempt')}/{msg.get('attempts')} lost the connection "
+              f"({msg.get('type')}: {msg.get('error')}); next attempt in {int(msg.get('wait') or 0)} s", file=sys.stderr)
+    elif "ok" in msg:
+        result = msg
+proc.wait()
 
 now = int(time.time())
-if proc.returncode != 0 or not result.get("ok"):
+ok = proc.returncode == 0 and result.get("ok") is True
+if ok:
+    err = ""
+else:
     etype = result.get("type") or ""
-    err = result.get("error") or etype or (proc.stderr or "").strip()[-500:] or "backup failed"
-    if etype in ("TimeoutError", "ConnectionRefusedError", "OSError", "ConnectionError"):
-        err = (f"could not reach the device at {ip}:62078 ({etype}). Check the IP address, "
-               f"that WiFi lockdown is enabled on the device, and that the server can route to it.")
-    elif etype == "ConnectionTerminatedError":
+    err = result.get("error") or etype or " | ".join(noise)[-500:] or "backup failed"
+    if etype == "ConnectionTerminatedError" and "attempt" not in err:
         err = ("the device closed the connection (ConnectionTerminatedError). Unlock the iPhone, keep it "
                "awake and enter the passcode when it asks for it, then start the backup again.")
-    # a fresh full snapshot that failed is partial: remove it so it does not count
-    # towards retention. never delete the persistent incremental backup on failure.
-    if not incremental:
-        subprocess.run(["podman", "exec", CONTAINER, "rm", "-rf", dest], capture_output=True)
-    dev["last_status"] = "failed"
-    dev["last_error"] = err[:500]
-    devices[udid] = dev
-    save_devices(devices)
+
+with devreg.locked():
+    devices = devreg.load_devices()
+    dev = devices.get(udid)
+    if dev is not None:
+        if ok:
+            if "device_encrypted" in result:
+                dev["encryption"] = bool(result["device_encrypted"])
+            elif result.get("encryption_enabled"):
+                dev["encryption"] = True
+            dev["last_backup"] = now
+            dev["last_status"] = "ok"
+            dev["last_error"] = ""
+        else:
+            dev["last_status"] = "failed"
+            dev["last_error"] = err[:500]
+        devreg.save_devices(devices)
+
+if not ok:
     print(agent.SD_ERR + "backup failed: " + err, file=sys.stderr)
     sys.exit(1)
 
-# success: prune old snapshots beyond retention (oldest first)
-if not incremental:
-    # prune old timestamped snapshots (keep the incremental dir if any)
-    subprocess.run(["podman", "exec", CONTAINER, "sh", "-c",
-                    f"ls -1d /data/backups/{udid}/*/ 2>/dev/null | grep -v '/incremental/$' | sort "
-                    f"| head -n -{retention} | xargs -r rm -rf"],
-                   capture_output=True, text=True)
-
-if "device_encrypted" in result:
-    dev["encryption"] = bool(result["device_encrypted"])
-elif result.get("encryption_enabled"):
-    dev["encryption"] = True
-dev["last_backup"] = now
-dev["last_status"] = "ok"
-dev["last_error"] = ""
-devices[udid] = dev
-save_devices(devices)
-
-json.dump({"udid": udid, "snapshot": ts, "status": "ok"}, fp=sys.stdout)
+json.dump({"udid": udid, "snapshot": result.get("snapshot", ""), "status": "ok",
+           "resumed": bool(result.get("resumed")), "attempts": int(result.get("attempts_used") or 1)}, fp=sys.stdout)
