@@ -21,6 +21,9 @@ The clone has its route, settings and secrets
     ${a} =    Run on node    runagent -m ${module_id} bash -c 'grep -v "=$" "$AGENT_STATE_DIR/passwords.env" | sort | sha256sum'
     ${b} =    Run on node    runagent -m ${clone_id} bash -c 'grep -v "=$" "$AGENT_STATE_DIR/passwords.env" | sort | sha256sum'
     Should Be Equal    ${a}    ${b}
+    ${a} =    Password hash of the test device    ${module_id}
+    ${b} =    Password hash of the test device    ${clone_id}
+    Should Be Equal    ${a}    ${b}
 
 Remove the clone
     Run on node    remove-module --no-preserve ${clone_id}
