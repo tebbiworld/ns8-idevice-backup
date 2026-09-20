@@ -21,3 +21,12 @@ The restored instance has settings and secrets
     ${a} =    Run on node    runagent -m ${module_id} bash -c 'sort "$AGENT_STATE_DIR/passwords.env" | sha256sum'
     ${b} =    Run on node    runagent -m ${restored_id} bash -c 'sort "$AGENT_STATE_DIR/passwords.env" | sha256sum'
     Should Be Equal    ${a}    ${b}
+
+The restored instance has the devices and their passwords
+    ${a} =    Password hash of the test device    ${module_id}
+    ${b} =    Password hash of the test device    ${restored_id}
+    Should Be Equal    ${a}    ${b}
+    ${modes} =    Run on node    runagent -m ${restored_id} bash -c 'stat -c \%a "$AGENT_STATE_DIR/devices.json" "$AGENT_STATE_DIR/device-secrets.json" | sort -u'
+    Should Be Equal As Strings    ${modes.strip()}    600
+    ${cfg} =    Run task    module/${restored_id}/get-configuration    {}
+    Should Be True    ${cfg['devices'][0]['encryption_password_set']}

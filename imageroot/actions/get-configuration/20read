@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 
+import devreg
 import modsecrets  # noqa: E402
 
 env = os.environ
@@ -35,32 +36,33 @@ try:
 except Exception:
     pass
 
-try:
-    with open("devices.json") as fp:
-        registry = json.load(fp)
-except FileNotFoundError:
-    registry = {}
+registry = devreg.load_devices()
 
-# Live enrichment: one shell call lists the lockdown records and the backup dirs.
+# Live enrichment: the lockdown records, and per device the snapshots (only
+# finished ones count as backups) and the status of a running backup.
 present = set()
-counts = {}
+overview = {}
 if running:
     try:
         out = subprocess.run(["podman", "exec", CONTAINER, "sh", "-c",
-                              "ls /var/lib/lockdown/ 2>/dev/null | sed 's/\\.plist$//'; echo '@@'; "
-                              "for d in /data/backups/*/; do [ -d \"$d\" ] && echo \"$(basename $d) $(ls -1 \"$d\" 2>/dev/null | wc -l)\"; done"],
+                              "ls /var/lib/lockdown/ 2>/dev/null | sed 's/\\.plist$//'"],
                              capture_output=True, text=True, timeout=15).stdout
-        head, _, tail = out.partition("@@")
-        present = {l.strip() for l in head.splitlines() if l.strip()}
-        for line in tail.splitlines():
-            parts = line.split()
-            if len(parts) == 2 and parts[1].isdigit():
-                counts[parts[0]] = int(parts[1])
+        present = {l.strip() for l in out.splitlines() if l.strip()}
     except Exception:
         pass
+    try:
+        out = subprocess.run(["podman", "exec", CONTAINER, "idevice-tool", "overview"],
+                             capture_output=True, text=True, timeout=30).stdout
+        overview = json.loads(out.strip().splitlines()[-1]).get("devices", {})
+    except Exception:
+        overview = {}
 
 devices = []
 for udid, d in sorted(registry.items(), key=lambda kv: kv[1].get("name", "")):
+    ov = overview.get(udid) or {}
+    snaps = ov.get("snapshots") or []
+    st = ov.get("status") or {}
+    active = st.get("state") in ("running", "waiting", "restoring")
     devices.append({
         "udid": udid,
         "name": d.get("name", udid),
@@ -69,9 +71,15 @@ for udid, d in sorted(registry.items(), key=lambda kv: kv[1].get("name", "")):
         "pairing_present": udid in present,
         "last_backup": d.get("last_backup", 0),
         "last_status": d.get("last_status", ""),
-        "backup_count": counts.get(udid, 0),
+        "backup_count": sum(1 for x in snaps if x.get("complete")),
+        "incomplete_count": sum(1 for x in snaps if not x.get("complete")),
+        "running": bool(active),
+        "run_state": st.get("state", "idle") if active else "idle",
+        "progress": int(st.get("percent") or 0) if active else 0,
+        "attempt": int(st.get("attempt") or 0) if active else 0,
+        "attempts": int(st.get("attempts") or 0) if active else 0,
         "encryption": bool(d.get("encryption", False)),
-        "encryption_password_set": bool(d.get("encryption_password")),
+        "encryption_password_set": devreg.has_password(udid),
         "backup_mode": d.get("backup_mode", "full"),
         "last_error": d.get("last_error", ""),
         "owner": d.get("owner", ""),

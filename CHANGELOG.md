@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.4.0 — 2026-09-20
+
+Long backups over a weak WiFi link: progress you can see, a lost connection that is retried, and nothing thrown away on failure. Found with an iPhone that needed more than an hour for a full backup and lost the connection at 82 %.
+
+### Added
+
+- **Progress in percent** in the self-service portal and in cluster-admin instead of a plain "backing up…": a progress bar with the percentage the device reports, the attempt number and whether an unfinished backup is being continued. The portal updates in place (no page reload, works on the phone layout); cluster-admin also shows backups that were started in the portal or by the timer, and the `run-backup` task reports its progress to the NS8 task list. Restores report their percentage the same way.
+- **A lost connection is tried again.** Up to three attempts with a pause of 60 s, in the same snapshot directory; every attempt is an audit entry (`backup_attempt`, `backup_retry`). After the last attempt the backup fails with a message that says what to do. A device that cannot be reached at all is not retried (the hourly timer does that), and errors that are no connection problem (wrong password, disk full) fail at once.
+- **An unfinished full backup is kept and continued.** Until now a failed full backup was deleted and the next one started in a new, empty directory. The partial snapshot now stays, marked as unfinished: it is not offered for restore, does not count towards the retention, and the next backup of that device continues in it. How much of it the device reuses is decided by iOS: a backup that was interrupted while updating an existing one (incremental mode) continues from the last finished state; a very first backup may be sent again in full. Older unfinished snapshots are removed when a backup finishes.
+- One backup per device at a time, whoever starts it (portal, cluster-admin, timer); backups started in the portal now follow the retention setting as well.
+
+### Security
+
+- **Backup passwords of the devices left `state/devices.json`.** They were stored there in plain text in a file with mode 0644. They now live in `state/device-secrets.json` (0600), the registry is 0600 too, and no action, page or log returns a password. Existing installations are migrated by the update (values unchanged); the file is part of the module backup, restore and clone, and a state restored from an older backup is migrated when the services start.
+- The password is handed to the engine through the environment of `podman exec` (`--env NAME`), not on its command line, where it was visible in the process list of the node.
+
+### Fixed
+
+- Updating an instance that was installed before 1.2.0 left the self-service portal with an empty session secret, every page answered 500: the hook that moves the portal to an allocated port re-applied the configuration before the secrets had been migrated. The migration now runs first, `configure-module` creates a missing session secret, and the portal no longer falls back to a fixed key.
+
+### Update note
+
+Nothing to do. If you consider the old passwords exposed (node administrators and everything running as the module user could read them, and they are in module backups taken so far), change the backup password of the device in iTunes/Finder or the Apple Devices app and enter the new one in the device row.
+
 ## 1.3.0 — 2026-09-19
 
 Alignment with the NethServer module conventions (NethServer/agents skills).

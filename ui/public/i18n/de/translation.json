@@ -117,7 +117,13 @@
     "autobackup": "Automatische Backups",
     "autobackup_helper": "Geräte automatisch sichern. Ein stündlicher Timer sichert jedes Gerät, dessen letztes Backup älter als das Intervall ist; schlafende Geräte werden beim nächsten Lauf erneut versucht.",
     "autobackup_interval": "Backup-Intervall (Stunden)",
-    "autobackup_interval_helper": "Mindeststunden zwischen automatischen Sicherungen eines Geräts (z. B. 24 = täglich)."
+    "autobackup_interval_helper": "Mindeststunden zwischen automatischen Sicherungen eines Geräts (z. B. 24 = täglich).",
+    "run_backing_up": "Sicherung läuft: {pct} %",
+    "run_restoring": "Wiederherstellung: {pct} %",
+    "run_waiting": "Verbindung verloren, nächster Versuch gleich ({n} von {m})",
+    "run_attempt": "Versuch {n} von {m}",
+    "unfinished_kept": "+ 1 unvollständiges, wird fortgesetzt",
+    "snapshot_unfinished": "unvollständig, nicht wiederherstellbar"
   },
   "about": {
     "title": "Über"

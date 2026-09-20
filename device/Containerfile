@@ -37,6 +37,9 @@ COPY --from=builder /opt/pmd3 /opt/pmd3
 COPY idevice-tool /usr/local/bin/idevice-tool
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY web-app.py /opt/web/app.py
+# Tests that need neither an iPhone nor a directory; the module's Robot suite
+# runs them in the image it is about to ship.
+COPY tests/ /opt/idevice-tests/
 RUN chmod +x /usr/local/bin/idevice-tool /usr/local/bin/entrypoint.sh
 ENV PATH=/opt/pmd3/bin:$PATH \
     PMD3_VERSION=${PMD3_VERSION}

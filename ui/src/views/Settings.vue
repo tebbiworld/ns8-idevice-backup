@@ -164,15 +164,22 @@
                   <input class="owner-input" type="text" :value="d.owner || ''" :placeholder="$t('settings.owner_placeholder')" :disabled="loading.owner === d.udid" @change="updateOwner(d.udid, $event.target.value)" />
                 </td>
                 <td>
-                  <span v-if="d.last_backup">{{ formatTime(d.last_backup) }}</span>
-                  <span v-else>—</span>
-                  <div v-if="d.last_status" class="status" :class="d.last_status === 'ok' ? 'ok' : 'bad'">{{ d.last_status }}</div>
+                  <template v-if="d.running">
+                    <NsProgressBar :value="d.progress" :indeterminate="d.run_state === 'waiting'" height="6px" class="run-bar" />
+                    <div class="status">{{ runLabel(d) }}</div>
+                  </template>
+                  <template v-else>
+                    <span v-if="d.last_backup">{{ formatTime(d.last_backup) }}</span>
+                    <span v-else>—</span>
+                    <div v-if="d.last_status" class="status" :class="d.last_status === 'ok' ? 'ok' : 'bad'">{{ d.last_status }}</div>
+                    <div v-if="d.last_status === 'failed' && d.last_error" class="status last-error">{{ d.last_error }}</div>
+                  </template>
                 </td>
-                <td>{{ d.backup_count }}</td>
+                <td>{{ d.backup_count }}<div v-if="d.incomplete_count" class="status">{{ $t("settings.unfinished_kept") }}</div></td>
                 <td class="actions">
-                  <NsButton kind="secondary" size="small" :icon="Backup16" :loading="loading.backup === d.udid" :disabled="!!loading.backup || !container_running || !d.pairing_present || !d.ip" @click="runBackup(d.udid)">{{ $t("settings.backup_now") }}</NsButton>
-                  <NsButton kind="tertiary" size="small" :icon="Restore16" :disabled="!!loading.backup || !d.backup_count" @click="openRestore(d)">{{ $t("settings.restore") }}</NsButton>
-                  <NsButton kind="danger--ghost" size="small" :icon="TrashCan16" :disabled="!!loading.backup" @click="deleteDevice(d.udid)">{{ $t("settings.delete") }}</NsButton>
+                  <NsButton kind="secondary" size="small" :icon="Backup16" :loading="loading.backup === d.udid" :disabled="!!loading.backup || d.running || !container_running || !d.pairing_present || !d.ip" @click="runBackup(d.udid)">{{ $t("settings.backup_now") }}</NsButton>
+                  <NsButton kind="tertiary" size="small" :icon="Restore16" :disabled="!!loading.backup || d.running || !d.backup_count" @click="openRestore(d)">{{ $t("settings.restore") }}</NsButton>
+                  <NsButton kind="danger--ghost" size="small" :icon="TrashCan16" :disabled="!!loading.backup || d.running" @click="deleteDevice(d.udid)">{{ $t("settings.delete") }}</NsButton>
                 </td>
               </tr>
             </tbody>
@@ -194,7 +201,7 @@
         <p v-if="restore.loadingSnapshots" class="bx--form__helper-text">{{ $t("common.processing") }}</p>
         <p v-else-if="!restore.snapshots.length" class="bx--form__helper-text">{{ $t("settings.restore_no_snapshots") }}</p>
         <cv-radio-group v-else vertical>
-          <cv-radio-button v-for="s in restore.snapshots" :key="s.snapshot" :label="snapshotLabel(s)" :value="s.snapshot" v-model="restore.snapshot" name="snap" />
+          <cv-radio-button v-for="s in restore.snapshots" :key="s.snapshot" :label="snapshotLabel(s)" :value="s.snapshot" :disabled="s.complete === false" v-model="restore.snapshot" name="snap" />
         </cv-radio-group>
 
         <h5 class="section">{{ $t("settings.restore_target") }}</h5>
@@ -234,6 +241,7 @@ export default {
     return {
       q: { page: "settings" },
       urlCheckInterval: null,
+      progressTimer: null,
       Upload20,
       Backup16,
       Restore16,
@@ -291,10 +299,14 @@ export default {
   },
   beforeRouteLeave(to, from, next) {
     clearInterval(this.urlCheckInterval);
+    clearTimeout(this.progressTimer);
     next();
   },
   created() {
     this.getConfiguration();
+  },
+  beforeDestroy() {
+    clearTimeout(this.progressTimer);
   },
   methods: {
     formatTime(epoch) {
@@ -307,7 +319,27 @@ export default {
     },
     snapshotLabel(s) {
       const size = s.size_mb ? ` — ${(s.size_mb / 1024).toFixed(1)} GB` : "";
-      return s.snapshot + size;
+      const unfinished = s.complete === false ? ` — ${this.$t("settings.snapshot_unfinished")}` : "";
+      return s.snapshot + size + unfinished;
+    },
+    runLabel(d) {
+      if (d.run_state === "waiting") {
+        return this.$t("settings.run_waiting", { n: Math.min(d.attempt + 1, d.attempts || d.attempt + 1), m: d.attempts || "?" });
+      }
+      const key = d.run_state === "restoring" ? "settings.run_restoring" : "settings.run_backing_up";
+      let text = this.$t(key, { pct: d.progress });
+      if (d.attempt > 1 && d.attempts) {
+        text += " (" + this.$t("settings.run_attempt", { n: d.attempt, m: d.attempts }) + ")";
+      }
+      return text;
+    },
+    scheduleProgressPoll() {
+      // While a backup or restore runs (started here, in the portal or by the
+      // timer) re-read the state every few seconds so the percentage moves.
+      clearTimeout(this.progressTimer);
+      if (this.devices.some((d) => d.running) || this.loading.backup) {
+        this.progressTimer = setTimeout(() => this.getConfiguration(true), 10000);
+      }
     },
     onFileChange(ev) {
       const file = ev.target.files && ev.target.files[0];
@@ -326,16 +358,28 @@ export default {
       };
       reader.readAsDataURL(file);
     },
-    async getConfiguration() {
-      this.loading.getConfiguration = true;
-      this.error.getConfiguration = "";
+    async getConfiguration(quiet = false) {
+      // quiet = background refresh of the progress: no loading state, the form stays usable
+      if (!quiet) {
+        this.loading.getConfiguration = true;
+        this.error.getConfiguration = "";
+      }
       const taskAction = "get-configuration";
       const eventId = this.getUuid();
-      this.core.$root.$once(`${taskAction}-aborted-${eventId}`, this.getConfigurationAborted);
-      this.core.$root.$once(`${taskAction}-completed-${eventId}`, this.getConfigurationCompleted);
+      if (quiet) {
+        // only the device list: a form the admin is editing must not be reset
+        this.core.$root.$once(`${taskAction}-aborted-${eventId}`, () => this.scheduleProgressPoll());
+        this.core.$root.$once(`${taskAction}-completed-${eventId}`, (ctx, res) => {
+          this.devices = (res.output && res.output.devices) || this.devices;
+          this.scheduleProgressPoll();
+        });
+      } else {
+        this.core.$root.$once(`${taskAction}-aborted-${eventId}`, this.getConfigurationAborted);
+        this.core.$root.$once(`${taskAction}-completed-${eventId}`, this.getConfigurationCompleted);
+      }
       const res = await to(this.createModuleTaskForApp(this.instanceName, { action: taskAction, extra: { title: this.$t("action." + taskAction), isNotificationHidden: true, eventId } }));
       const err = res[0];
-      if (err) {
+      if (err && !quiet) {
         this.error.getConfiguration = this.getErrorMessage(err);
         this.loading.getConfiguration = false;
       }
@@ -371,6 +415,7 @@ export default {
         ldap_domain: c.ldap_domain || "",
       };
       this.devices = c.devices || [];
+      this.scheduleProgressPoll();
     },
     async saveSelfService() {
       this.loading.selfService = true;
@@ -476,6 +521,7 @@ export default {
         extra: { title: this.$t("action.run-backup"), description: this.$t("common.processing"), eventId },
       }));
       if (res[0]) { this.error.runBackup = this.getErrorMessage(res[0]); this.loading.backup = ""; }
+      else this.scheduleProgressPoll();
     },
     async deleteDevice(udid) {
       const taskAction = "delete-device";
@@ -552,4 +598,6 @@ export default {
 .ok { color: #24a148; font-weight: 600; }
 .bad { color: #da1e28; font-weight: 600; }
 .status { font-size: 0.75rem; }
+.last-error { color: #6f6f6f; max-width: 22rem; white-space: normal; }
+.run-bar { min-width: 9rem; margin: 0.35rem 0 0.2rem; }
 </style>

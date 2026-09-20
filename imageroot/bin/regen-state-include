@@ -13,11 +13,13 @@ import os
 BASE = [
     "#",
     "# Generated from IDEVICE_INCLUDE_BACKUPS by the module. Do not edit by hand.",
-    "# Always carried: the pairing records and the device registry (small, critical).",
+    "# Always carried: the pairing records, the device registry and the device",
+    "# passwords (small, critical).",
     "#",
     "state/environment",
     "state/passwords.env",
     "state/devices.json",
+    "state/device-secrets.json",
     "volumes/idevice-lockdown",
 ]
 

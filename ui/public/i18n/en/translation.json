@@ -117,7 +117,13 @@
     "autobackup": "Automatic backups",
     "autobackup_helper": "Back up devices automatically. An hourly timer backs up each device whose last backup is older than the interval; devices that are asleep are retried on the next run.",
     "autobackup_interval": "Backup interval (hours)",
-    "autobackup_interval_helper": "Minimum hours between automatic backups of a device (e.g. 24 = daily)."
+    "autobackup_interval_helper": "Minimum hours between automatic backups of a device (e.g. 24 = daily).",
+    "run_backing_up": "Backing up: {pct} %",
+    "run_restoring": "Restoring: {pct} %",
+    "run_waiting": "Connection lost, next attempt shortly ({n} of {m})",
+    "run_attempt": "attempt {n} of {m}",
+    "unfinished_kept": "+ 1 unfinished, will be continued",
+    "snapshot_unfinished": "unfinished, cannot be restored"
   },
   "about": {
     "title": "About"

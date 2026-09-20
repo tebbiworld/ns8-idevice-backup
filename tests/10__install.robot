@@ -24,6 +24,12 @@ Configure the module
 The portal answers behind Traefik
     Wait Until Keyword Succeeds    30 times    10 seconds    Portal login page is served
 
+Register a device with the released version
+    [Documentation]    Its backup password lands in devices.json (0644) there;
+    ...                the update has to move it, see the devices suite.
+    Skip If    '${SCENARIO}' != 'update'    scenario is ${SCENARIO}
+    Register the test device    ${module_id}
+
 Update to the image under test
     Skip If    '${SCENARIO}' != 'update'    scenario is ${SCENARIO}
     Run on node    api-cli run update-module --data '{"force":true,"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'

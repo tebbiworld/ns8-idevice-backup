@@ -17,18 +17,11 @@ import subprocess
 import sys
 
 import agent
+import devreg
 
 CONTAINER = "idevice-backup"
 UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
 SNAP_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
-
-
-def load_devices():
-    try:
-        with open("devices.json") as fp:
-            return json.load(fp)
-    except FileNotFoundError:
-        return {}
 
 
 data = json.load(sys.stdin)
@@ -42,7 +35,7 @@ if not SNAP_RE.match(snapshot):
     print(agent.SD_ERR + "invalid or missing snapshot name", file=sys.stderr)
     sys.exit(2)
 
-devices = load_devices()
+devices = devreg.load_devices()
 dev = devices.get(udid)          # source device (owns the backup + its password)
 target = devices.get(target_udid)  # device we connect to and write onto
 if not dev:
@@ -58,18 +51,29 @@ if not ip:
 cross_device = target_udid != udid
 
 dest = f"/data/backups/{udid}/{snapshot}"
-# the snapshot must exist and hold the <udid> backup folder
-check = subprocess.run(["podman", "exec", CONTAINER, "sh", "-c",
-                        f"test -d '{dest}/{udid}' && echo ok"], capture_output=True, text=True)
-if "ok" not in check.stdout:
+# the snapshot must exist, hold the <udid> backup folder and be a finished backup
+check = subprocess.run(["podman", "exec", CONTAINER, "idevice-tool", "snapshots", "--udid", udid,
+                        "--base", f"/data/backups/{udid}"], capture_output=True, text=True)
+try:
+    known = {s["snapshot"]: s["complete"] for s in json.loads(check.stdout.strip().splitlines()[-1])["snapshots"]}
+except Exception:
+    known = {}
+if snapshot not in known:
     print(agent.SD_ERR + f"snapshot '{snapshot}' not found for this device", file=sys.stderr)
     sys.exit(2)
+if not known[snapshot]:
+    print(agent.SD_ERR + f"snapshot '{snapshot}' is an unfinished backup and cannot be restored", file=sys.stderr)
+    sys.exit(2)
 
-enc_pw = (data.get("encryption_password") or dev.get("encryption_password") or "")
+enc_pw = (data.get("encryption_password") or devreg.get_password(udid) or "")
 
 cmd = ["podman", "exec"]
+env = os.environ.copy()
 if enc_pw:
-    cmd += ["-e", "IDEVICE_RESTORE_PASSWORD=" + enc_pw]
+    # value-less --env: the password is handed over through our environment,
+    # not on the command line
+    env["IDEVICE_RESTORE_PASSWORD"] = enc_pw
+    cmd += ["--env", "IDEVICE_RESTORE_PASSWORD"]
 cmd += [CONTAINER, "idevice-tool", "restore", "--udid", target_udid, "--ip", ip,
         "--dir", dest, "--source", udid]
 
@@ -79,7 +83,7 @@ if cross_device:
           f"(that device is overwritten and reboots)", file=sys.stderr)
 else:
     print(agent.SD_INFO + f"restoring {tgt_name} from {snapshot} (the device is overwritten and reboots)", file=sys.stderr)
-proc = subprocess.run(cmd, capture_output=True, text=True)
+proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
 out = (proc.stdout or "").strip().splitlines()
 result = {}
 for line in reversed(out):

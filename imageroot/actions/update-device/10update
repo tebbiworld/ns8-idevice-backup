@@ -9,11 +9,11 @@
 # (e.g. after a DHCP lease change), without re-uploading the pairing file.
 
 import json
-import os
 import re
 import sys
 
 import agent
+import devreg
 
 UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
 
@@ -23,43 +23,35 @@ if not UDID_RE.match(udid):
     print(agent.SD_ERR + "invalid UDID", file=sys.stderr)
     sys.exit(2)
 
-try:
-    with open("devices.json") as fp:
-        devices = json.load(fp)
-except FileNotFoundError:
-    devices = {}
-if udid not in devices:
-    print(agent.SD_ERR + "unknown device", file=sys.stderr)
-    sys.exit(2)
-if "name" in data and (data["name"] or "").strip():
-    devices[udid]["name"] = data["name"].strip()
-if "ip" in data:
-    devices[udid]["ip"] = (data["ip"] or "").strip()
-if "backup_mode" in data:
-    m = (data["backup_mode"] or "full").strip().lower()
-    devices[udid]["backup_mode"] = "incremental" if m == "incremental" else "full"
-if "owner" in data:
-    owner = (data["owner"] or "").strip()
-    if owner:
-        devices[udid]["owner"] = owner
-    else:
-        devices[udid].pop("owner", None)
-        devices[udid].pop("domain", None)
-if "domain" in data:
-    dom = (data["domain"] or "").strip()
-    if dom:
-        devices[udid]["domain"] = dom
-    else:
-        devices[udid].pop("domain", None)
-if "encryption_password" in data:
-    pw = str(data["encryption_password"] or "")
-    if pw:
-        devices[udid]["encryption_password"] = pw
-    else:
-        devices[udid].pop("encryption_password", None)
-with open("devices.json.tmp", "w") as fp:
-    json.dump(devices, fp, indent=2)
-os.replace("devices.json.tmp", "devices.json")
+with devreg.locked():
+    devices = devreg.load_devices()
+    if udid not in devices:
+        print(agent.SD_ERR + "unknown device", file=sys.stderr)
+        sys.exit(2)
+    if "name" in data and (data["name"] or "").strip():
+        devices[udid]["name"] = data["name"].strip()
+    if "ip" in data:
+        devices[udid]["ip"] = (data["ip"] or "").strip()
+    if "backup_mode" in data:
+        m = (data["backup_mode"] or "full").strip().lower()
+        devices[udid]["backup_mode"] = "incremental" if m == "incremental" else "full"
+    if "owner" in data:
+        owner = (data["owner"] or "").strip()
+        if owner:
+            devices[udid]["owner"] = owner
+        else:
+            devices[udid].pop("owner", None)
+            devices[udid].pop("domain", None)
+    if "domain" in data:
+        dom = (data["domain"] or "").strip()
+        if dom:
+            devices[udid]["domain"] = dom
+        else:
+            devices[udid].pop("domain", None)
+    if "encryption_password" in data:
+        # state/device-secrets.json (0600), never the registry; empty = forget it
+        devreg.set_password(udid, str(data["encryption_password"] or ""))
+    devreg.save_devices(devices)
 json.dump({"udid": udid, "name": devices[udid]["name"], "ip": devices[udid]["ip"],
            "backup_mode": devices[udid].get("backup_mode", "full"),
            "owner": devices[udid].get("owner", "")}, fp=sys.stdout)

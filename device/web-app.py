@@ -14,6 +14,8 @@
 # no owner are managed only in cluster-admin and never shown here.
 
 import base64
+import contextlib
+import fcntl
 import html
 import json
 import os
@@ -28,12 +30,14 @@ import time
 
 import ldap3
 from ldap3.utils.conv import escape_filter_chars
-from flask import Flask, request, redirect, session, abort, url_for
+from flask import Flask, request, redirect, session, abort, url_for, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-app.secret_key = os.environ.get("SESSION_SECRET", "dev-insecure-change-me")
+# An empty or missing secret must not end in a fixed, guessable key or in a
+# 500 on every page: fall back to a random one (sessions then end with a restart).
+app.secret_key = os.environ.get("SESSION_SECRET") or secrets.token_hex(32)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
@@ -43,8 +47,10 @@ app.config.update(
 
 STATE_DIR = os.environ.get("STATE_DIR", "/state")
 DEVICES_JSON = os.path.join(STATE_DIR, "devices.json")
+SECRETS_JSON = os.path.join(STATE_DIR, "device-secrets.json")
+REGISTRY_LOCK = os.path.join(STATE_DIR, ".devices.lock")
 LOCKDOWN_DIR = "/var/lib/lockdown"
-BACKUP_ROOT = "/data/backups"
+BACKUP_ROOT = os.environ.get("BACKUP_ROOT", "/data/backups")
 UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
 
 LDAP_URL = os.environ.get("LDAP_URL_CONTAINER", os.environ.get("LDAP_URL", "")).strip()
@@ -60,6 +66,25 @@ LDAP_CA_FILE = os.environ.get("LDAP_CA_FILE", "").strip()
 LDAP_DOMAIN = os.environ.get("LDAP_DOMAIN", "").strip()
 APP_TITLE = os.environ.get("APP_TITLE", "iOS Device Backup")
 ALLOW_RESTORE = os.environ.get("SELFSERVICE_RESTORE", "true").strip().lower() in ("1", "true", "yes", "on")
+try:
+    RETENTION = max(0, int(os.environ.get("RETENTION", "0") or 0))   # 0 = the portal does not prune
+except ValueError:
+    RETENTION = 0
+
+
+def _load_tool():
+    """The snapshot and status logic lives in idevice-tool; use it as a library."""
+    import importlib.machinery
+    import importlib.util
+    path = os.environ.get("IDEVICE_TOOL", "/usr/local/bin/idevice-tool")
+    loader = importlib.machinery.SourceFileLoader("idevice_tool", path)
+    spec = importlib.util.spec_from_loader("idevice_tool", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+tool = _load_tool()
 
 # --------------------------------------------------------------------- i18n
 
@@ -74,6 +99,10 @@ T = {
         "h_device": "Device", "h_ip": "IP", "h_last": "Last backup",
         "h_snap": "Available snapshots", "h_mode": "Mode", "h_actions": "Actions",
         "save": "Save", "ok": "ok", "failed": "failed", "backing_up": "backing up…",
+        "st_running": "Backing up: {pct} %", "st_restoring": "Restoring: {pct} %",
+        "st_waiting": "Connection lost, next attempt shortly ({n} of {m})",
+        "st_attempt": "attempt {n} of {m}", "st_resumed": "continuing an unfinished backup",
+        "st_unfinished": "unfinished backup kept, the next run continues it",
         "no_backup": "no backup yet", "enc": "enc", "full": "Full", "incremental": "Incremental",
         "restore": "Restore", "backup_now": "Back up now", "remove": "Remove",
         "confirm_restore": "This ERASES the device and restores the selected backup. Continue?",
@@ -102,6 +131,10 @@ T = {
         "h_device": "Ger\u00e4t", "h_ip": "IP", "h_last": "Letztes Backup",
         "h_snap": "Verf\u00fcgbare Snapshots", "h_mode": "Modus", "h_actions": "Aktionen",
         "save": "Speichern", "ok": "ok", "failed": "fehlgeschlagen", "backing_up": "sichert\u2026",
+        "st_running": "Sicherung l\u00e4uft: {pct} %", "st_restoring": "Wiederherstellung: {pct} %",
+        "st_waiting": "Verbindung verloren, n\u00e4chster Versuch gleich ({n} von {m})",
+        "st_attempt": "Versuch {n} von {m}", "st_resumed": "unvollst\u00e4ndiges Backup wird fortgesetzt",
+        "st_unfinished": "unvollst\u00e4ndiges Backup bleibt erhalten, der n\u00e4chste Lauf setzt es fort",
         "no_backup": "noch kein Backup", "enc": "versch.", "full": "Voll", "incremental": "Inkrementell",
         "restore": "Wiederherstellen", "backup_now": "Jetzt sichern", "remove": "Entfernen",
         "confirm_restore": "Dies L\u00d6SCHT das Ger\u00e4t und spielt das gew\u00e4hlte Backup zur\u00fcck. Fortfahren?",
@@ -208,109 +241,203 @@ def ldap_authenticate(login, password):
 
 # ----------------------------------------------------------------------- registry
 
-def load_devices():
+@contextlib.contextmanager
+def registry_locked():
+    """Serialise read-modify-write of the registry and the secrets with the
+    module actions on the host (same lock file, flock crosses the container)."""
+    fd = os.open(REGISTRY_LOCK, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        with open(DEVICES_JSON) as fp:
-            return json.load(fp)
-    except FileNotFoundError:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        with _reg_lock:
+            yield
+    finally:
+        os.close(fd)
+
+
+def _load_json(path):
+    try:
+        with open(path) as fp:
+            data = json.load(fp)
+    except (FileNotFoundError, ValueError):
         return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_json(path, data):
+    tmp = f"{path}.web.{os.getpid()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fp:
+        json.dump(data, fp, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def load_devices():
+    return _load_json(DEVICES_JSON)
 
 
 def save_devices(devices):
-    tmp = DEVICES_JSON + ".web.tmp"
-    with open(tmp, "w") as fp:
-        json.dump(devices, fp, indent=2)
-    os.replace(tmp, DEVICES_JSON)
+    # the backup passwords live in device-secrets.json, never in the registry
+    for d in devices.values():
+        if isinstance(d, dict):
+            d.pop("encryption_password", None)
+    _save_json(DEVICES_JSON, devices)
+
+
+def get_device_password(udid):
+    return str((_load_json(SECRETS_JSON).get(udid) or {}).get("encryption_password") or "")
+
+
+def set_device_password(udid, password):
+    """Call with the registry lock held. An empty password removes the entry."""
+    secrets_ = _load_json(SECRETS_JSON)
+    if password:
+        secrets_[udid] = {"encryption_password": str(password)}
+    else:
+        secrets_.pop(udid, None)
+    _save_json(SECRETS_JSON, secrets_)
 
 
 def owns(dev, uid):
     return bool(dev) and dev.get("owner") and dev.get("owner") == uid
 
 
+def backup_base(udid):
+    return os.path.join(BACKUP_ROOT, udid)
+
+
+def run_state(udid):
+    """What runs for this device right now, whoever started it (this portal,
+    cluster-admin or the timer): the tool keeps <base>/.status.json current."""
+    st = tool.read_status(backup_base(udid))
+    active = st.get("state") in ("running", "waiting", "restoring")
+    if not active and udid in _running:
+        # started here a moment ago, the tool has not written its status yet
+        return {"running": True, "state": "running", "percent": 0, "attempt": 1, "attempts": 0, "resumed": False}
+    return {
+        "running": active,
+        "state": st.get("state", "idle") if active else "idle",
+        "percent": int(st.get("percent") or 0) if active else 0,
+        "attempt": int(st.get("attempt") or 0),
+        "attempts": int(st.get("attempts") or 0),
+        "resumed": bool(st.get("resumed")) if active else False,
+    }
+
+
+def status_text(rs):
+    if rs["state"] == "waiting":
+        return t("st_waiting", n=min(rs["attempt"] + 1, rs["attempts"] or rs["attempt"] + 1), m=rs["attempts"] or "?")
+    text = t("st_restoring" if rs["state"] == "restoring" else "st_running", pct=rs["percent"])
+    extra = []
+    if rs["attempt"] > 1 and rs["attempts"]:
+        extra.append(t("st_attempt", n=rs["attempt"], m=rs["attempts"]))
+    if rs["resumed"] and rs["state"] == "running":
+        extra.append(t("st_resumed"))
+    return text + (" (" + ", ".join(extra) + ")" if extra else "")
+
+
 def my_devices(uid):
     out = []
+    secrets_ = _load_json(SECRETS_JSON)
     for udid, d in load_devices().items():
         if d.get("owner") == uid:
             item = dict(d)
+            item.pop("encryption_password", None)
             item["udid"] = udid
-            item["running"] = udid in _running
-            item["snapshots"] = list_snapshots(udid)
+            item["run"] = run_state(udid)
+            item["running"] = item["run"]["running"]
+            item["password_set"] = bool((secrets_.get(udid) or {}).get("encryption_password"))
+            snaps = list_snapshots(udid)
+            item["snapshots"] = [n for n, complete in snaps if complete]
+            item["unfinished"] = any(not complete for _, complete in snaps)
             out.append(item)
     out.sort(key=lambda x: x.get("name", ""))
     return out
 
 
 def list_snapshots(udid):
-    d = os.path.join(BACKUP_ROOT, udid)
-    if not os.path.isdir(d):
-        return []
-    snaps = []
-    for name in sorted(os.listdir(d), reverse=True):
-        p = os.path.join(d, name)
-        if os.path.isdir(p) and not name.startswith("."):
-            snaps.append(name)
-    return snaps
+    """[(name, complete)], newest first. Only a backup the device finished can be restored."""
+    base = backup_base(udid)
+    return [(n, tool.is_complete(base, n, udid)) for n in reversed(tool.snapshot_names(base))]
 
 
 # ------------------------------------------------------------------------- backup
 
 def _do_backup(udid, ip, incremental, enc_pw, set_pw, uid=""):
-    dest = f"{BACKUP_ROOT}/{udid}/" + ("incremental" if incremental else time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime()))
-    cmd = ["idevice-tool", "backup", "--udid", udid, "--ip", ip, "--dir", dest]
-    if incremental:
-        cmd.append("--incremental")
+    # The tool chooses the snapshot: a new one, or the unfinished one of the last
+    # run, which it continues. A failed run is kept (marked unfinished) instead of
+    # deleted, and a lost connection is tried again before the run counts as failed.
+    cmd = ["idevice-tool", "backup", "--udid", udid, "--ip", ip, "--base", backup_base(udid),
+           "--mode", "incremental" if incremental else "full", "--retention", str(RETENTION)]
     if set_pw:
         cmd.append("--set-password")
     env = dict(os.environ)
     if set_pw and enc_pw:
         env["IDEVICE_SET_PASSWORD"] = enc_pw
     ok = False
+    result = {}
+    err = ""
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
-        result = {}
-        for line in reversed((proc.stdout or "").splitlines()):
-            if line.strip().startswith("{"):
-                try:
-                    result = json.loads(line)
-                except Exception:
-                    result = {}
-                break
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
+        for line in proc.stdout:
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if msg.get("event") == "attempt":
+                audit("backup_attempt", uid=uid, udid=udid, attempt=f"{msg.get('attempt')}/{msg.get('attempts')}",
+                      snapshot=msg.get("snapshot"), resumed=("yes" if msg.get("resumed") else "no"))
+            elif msg.get("event") == "retry":
+                audit("backup_retry", uid=uid, udid=udid, attempt=f"{msg.get('attempt')}/{msg.get('attempts')}",
+                      reason=msg.get("type"), wait=f"{int(msg.get('wait') or 0)}s")
+            elif "ok" in msg:
+                result = msg
+        proc.wait()
         ok = proc.returncode == 0 and result.get("ok") is True
         err = "" if ok else (result.get("error") or result.get("type") or "")
     except Exception as e:
         err = str(e)
-    with _reg_lock:
-        devices = load_devices()
-        d = devices.get(udid)
-        if d is not None:
-            if ok:
-                d["last_backup"] = int(time.time())
-                d["last_status"] = "ok"
-                d["last_error"] = ""
-                if "device_encrypted" in result:
-                    d["encryption"] = bool(result["device_encrypted"])
-            else:
-                if not incremental:
-                    subprocess.run(["rm", "-rf", dest], capture_output=True)
-                d["last_status"] = "failed"
-                d["last_error"] = (err or "backup failed")[:300]
-            devices[udid] = d
-            save_devices(devices)
-    audit("backup_done", uid=uid, udid=udid, result=("ok" if ok else "failed"))
-    _running.pop(udid, None)
+    try:
+        with registry_locked():
+            devices = load_devices()
+            d = devices.get(udid)
+            if d is not None:
+                if ok:
+                    d["last_backup"] = int(time.time())
+                    d["last_status"] = "ok"
+                    d["last_error"] = ""
+                    if "device_encrypted" in result:
+                        d["encryption"] = bool(result["device_encrypted"])
+                else:
+                    d["last_status"] = "failed"
+                    d["last_error"] = (err or "backup failed")[:500]
+                devices[udid] = d
+                save_devices(devices)
+        audit("backup_done", uid=uid, udid=udid, result=("ok" if ok else "failed"),
+              attempts=result.get("attempts_used", ""), snapshot=result.get("snapshot", ""))
+    finally:
+        # Whatever happens above (a full disk while saving the registry, for
+        # example): the device must not stay marked as busy, otherwise
+        # start_backup refuses every later run and the UI shows a backup that
+        # is not running. The restore path does the same.
+        _running.pop(udid, None)
 
 
 def start_backup(udid, dev, uid=""):
-    if udid in _running:
-        return
+    if udid in _running or run_state(udid)["running"]:
+        return False
     ip = (dev.get("ip") or "").strip()
     if not ip:
-        return
+        return False
     incremental = (dev.get("backup_mode") or "full") == "incremental"
-    enc_pw = dev.get("encryption_password") or ""
+    enc_pw = get_device_password(udid)
     set_pw = bool(enc_pw)  # the engine only enables it if the device is not already encrypted
     _running[udid] = True
     threading.Thread(target=_do_backup, args=(udid, ip, incremental, enc_pw, set_pw, uid), daemon=True).start()
+    return True
 
 
 # --------------------------------------------------------------------------- CSRF
@@ -361,6 +488,9 @@ col.c-dev{{width:14%}} col.c-ip{{width:17%}} col.c-last{{width:13%}} col.c-snap{
 .row{{display:flex;gap:.75rem;flex-wrap:wrap;align-items:end}} .row>div{{flex:1;min-width:8rem}} .row>div.sm{{flex:0 1 13rem}}
 .err{{background:#fff1f1;border:1px solid #da1e28;color:#a2191f;padding:.6rem;border-radius:4px;margin-bottom:1rem}}
 .actbtns{{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}}
+.prog{{height:.5rem;border-radius:.25rem;background:#e0e0e0;overflow:hidden;margin:.3rem 0 .15rem;max-width:16rem}}
+.prog>span{{display:block;height:100%;background:#0f62fe;transition:width .6s}}
+.prog.wait>span{{background:#f1c21b}}
 .howto{{margin:.5rem 0 0 1.2rem;padding:0}} .howto li{{margin-bottom:.5rem}} form{{margin:0}}
 @media (prefers-color-scheme:dark){{body{{background:#161616;color:#f4f4f4}}.card{{background:#262626;border-color:#393939}}input,select{{background:#161616;color:#f4f4f4;border-color:#6f6f6f}}}}
 /* Phones: the wide device table becomes one stacked card per device. */
@@ -400,8 +530,51 @@ def lang_switch():
 
 
 def render(body, refresh=False):
-    r = '<meta http-equiv="refresh" content="6">' if refresh else ""
+    # Without JavaScript the page still reloads while a backup runs; with it the
+    # script below updates the percentage in place and the reload is not needed.
+    r = '<noscript><meta http-equiv="refresh" content="10"></noscript>' if refresh else ""
     return PAGE.format(title=esc(APP_TITLE), body=body, refresh=r, lang=lang(), footer=esc(t("footer")))
+
+
+def status_html(d, L):
+    """The "last backup" cell of one device."""
+    rs = d["run"]
+    if rs["running"]:
+        cls = "prog wait" if rs["state"] == "waiting" else "prog"
+        return (f'<div class="{cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" '
+                f'aria-valuenow="{rs["percent"]}"><span style="width:{rs["percent"]}%"></span></div>'
+                f'<div class="muted">{esc(status_text(rs))}</div>')
+    hint = f'<div class="muted">{L["st_unfinished"]}</div>' if d.get("unfinished") else ""
+    if d.get("last_status") == "ok":
+        return f'<span class="muted">{fmt_time(d.get("last_backup"))}</span> <span class="ok">{L["ok"]}</span>' + hint
+    if d.get("last_status") == "failed":
+        return f'<span class="bad">{L["failed"]}</span><div class="muted">{esc(d.get("last_error"))}</div>' + hint
+    return f'<span class="muted">{L["no_backup"]}</span>' + hint
+
+
+POLL_JS = """<script>
+(function(){
+  var url=%s, busy=%s;
+  function tick(){
+    fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json'}}).then(function(r){
+      if(r.status===401||r.status===403){location.reload();return null;}
+      return r.json();
+    }).then(function(j){
+      if(!j)return;
+      var any=false;
+      Object.keys(j.devices).forEach(function(u){
+        var d=j.devices[u], cell=document.getElementById('st-'+u);
+        if(d.running)any=true;
+        if(cell&&cell.innerHTML!==d.html)cell.innerHTML=d.html;
+      });
+      // a run ended (or one was started elsewhere): reload once for buttons and snapshots
+      if(any!==busy){location.reload();return;}
+      setTimeout(tick, any?3000:20000);
+    }).catch(function(){setTimeout(tick,10000);});
+  }
+  setTimeout(tick, busy?2000:20000);
+})();
+</script>"""
 
 
 def login_view(err=False):
@@ -441,7 +614,8 @@ def devices_view():
     L = {k: esc(t(k)) for k in ("logout", "my_devices", "h_device", "h_ip", "h_last",
         "h_snap", "h_mode", "h_actions", "save", "restore", "backup_now", "remove",
         "no_devices", "add_device", "f_name", "f_ip", "f_encpw", "f_pairing",
-        "upload_add", "enc", "full", "incremental", "ok", "failed", "backing_up", "no_backup")}
+        "upload_add", "enc", "full", "incremental", "ok", "failed", "backing_up", "no_backup",
+        "st_unfinished")}
     hello = esc(t("hello", name=disp))
     add_intro = esc(t("add_intro"))
     cr_restore = t("confirm_restore").replace("\\", "\\\\").replace("'", "\\'")
@@ -456,15 +630,7 @@ def devices_view():
         u_backup = esc(url_for("device_backup", udid=d["udid"]))
         u_restore = esc(url_for("device_restore", udid=d["udid"]))
         u_delete = esc(url_for("device_delete", udid=d["udid"]))
-        status = ""
-        if d["running"]:
-            status = '<span class="muted">backing up…</span>'
-        elif d.get("last_status") == "ok":
-            status = f'<span class="muted">{fmt_time(d.get("last_backup"))}</span> <span class="ok">{L["ok"]}</span>'
-        elif d.get("last_status") == "failed":
-            status = f'<span class="bad">{L["failed"]}</span><div class="muted">{esc(d.get("last_error"))}</div>'
-        else:
-            status = '<span class="muted">no backup yet</span>'
+        status = status_html(d, L)
         snaps = d["snapshots"]
         snap_html = ""
         if snaps:
@@ -479,7 +645,7 @@ def devices_view():
                     f'<button class="danger">{L["restore"]}</button></form>'
                 )
             snap_html = restore
-        enc = "✓" if (d.get("encryption") or d.get("encryption_password_set") or d.get("encryption_password")) else "—"
+        enc = "✓" if (d.get("encryption") or d.get("password_set")) else "—"
         disabled = "disabled" if d["running"] else ""
         rows += f"""<tr>
 <td class="c-name" data-label="{L['h_device']}"><b>{esc(d.get('name'))}</b><div class="udid">{udid}</div></td>
@@ -487,7 +653,7 @@ def devices_view():
     <input type="hidden" name="csrf" value="{tok}">
     <input class="ip-in" name="ip" value="{esc(d.get('ip'))}" placeholder="{L['f_ip']}">
     <button class="sec" {disabled}>{L['save']}</button></form></td>
-<td data-label="{L['h_last']}">{status}</td>
+<td data-label="{L['h_last']}" id="st-{udid}">{status}</td>
 <td data-label="{L['h_snap']}">{snap_html or '<span class="muted">—</span>'}</td>
 <td data-label="{L['h_mode']}"><div class="moderow"><span class="muted">{L['enc']} {enc}</span>
   <form method="post" action="{u_mode}">
@@ -504,7 +670,7 @@ def devices_view():
 </div></td></tr>"""
 
     if not devs:
-        rows = '<tr><td colspan="6" class="muted">No devices yet. Add one below.</td></tr>'
+        rows = f'<tr><td colspan="6" class="muted">{L["no_devices"]}</td></tr>'
 
     body = f"""
 {lang_switch()}<div class="top"><h1>{hello}</h1>
@@ -525,6 +691,7 @@ def devices_view():
   </div>
   <div style="margin-top:1rem"><button type="submit">{L['upload_add']}</button></div>
 </form></div>{howto}"""
+    body += POLL_JS % (json.dumps(url_for("progress")), "true" if any_running else "false")
     return render(body, refresh=any_running)
 
 
@@ -540,6 +707,24 @@ def index():
     if not session.get("uid"):
         return redirect(url_for("login_form"))
     return devices_view()
+
+
+@app.get("/progress.json")
+def progress():
+    """State of the logged-in user's own devices, polled by the device page."""
+    uid = session.get("uid")
+    if not uid:
+        return jsonify({"error": "login required"}), 401
+    L = {k: esc(t(k)) for k in ("ok", "failed", "no_backup", "st_unfinished")}
+    out = {}
+    for d in my_devices(uid):
+        rs = d["run"]
+        out[d["udid"]] = {"running": rs["running"], "state": rs["state"], "percent": rs["percent"],
+                          "attempt": rs["attempt"], "attempts": rs["attempts"], "resumed": rs["resumed"],
+                          "last_status": d.get("last_status", ""), "html": status_html(d, L)}
+    resp = jsonify({"devices": out})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.get("/login")
@@ -619,7 +804,7 @@ def device_add():
     os.makedirs(LOCKDOWN_DIR, exist_ok=True)
     with open(os.path.join(LOCKDOWN_DIR, f"{udid}.plist"), "wb") as fp:
         fp.write(raw)
-    with _reg_lock:
+    with registry_locked():
         devices = load_devices()
         d = devices.get(udid, {})
         if d.get("owner") and d.get("owner") != uid:
@@ -639,7 +824,7 @@ def device_add():
         d.setdefault("encryption", False)
         pw = request.form.get("encryption_password") or ""
         if pw:
-            d["encryption_password"] = pw
+            set_device_password(udid, pw)   # device-secrets.json (0600), not the registry
         devices[udid] = d
         save_devices(devices)
     audit("device_add", uid=uid, udid=udid, src=request.remote_addr)
@@ -650,7 +835,7 @@ def device_add():
 def device_ip(udid):
     check_csrf()
     _require_owned(udid)
-    with _reg_lock:
+    with registry_locked():
         devices = load_devices()
         devices[udid]["ip"] = (request.form.get("ip") or "").strip()
         save_devices(devices)
@@ -663,7 +848,7 @@ def device_mode(udid):
     check_csrf()
     _require_owned(udid)
     m = (request.form.get("backup_mode") or "full").strip().lower()
-    with _reg_lock:
+    with registry_locked():
         devices = load_devices()
         devices[udid]["backup_mode"] = "incremental" if m == "incremental" else "full"
         save_devices(devices)
@@ -675,8 +860,8 @@ def device_mode(udid):
 def device_backup(udid):
     check_csrf()
     dev = _require_owned(udid)
-    start_backup(udid, dev, session.get("uid", ""))
-    audit("backup_start", uid=session.get("uid", ""), udid=udid, mode=dev.get("backup_mode", "full"), src=request.remote_addr)
+    if start_backup(udid, dev, session.get("uid", "")):
+        audit("backup_start", uid=session.get("uid", ""), udid=udid, mode=dev.get("backup_mode", "full"), src=request.remote_addr)
     return redirect(url_for("index"))
 
 
@@ -687,13 +872,13 @@ def device_restore(udid):
     if not ALLOW_RESTORE:
         abort(403)
     snapshot = (request.form.get("snapshot") or "").strip()
-    if snapshot not in list_snapshots(udid):
+    if snapshot not in [n for n, complete in list_snapshots(udid) if complete]:
         abort(404)
     ip = (dev.get("ip") or "").strip()
-    if not ip or udid in _running:
+    if not ip or udid in _running or run_state(udid)["running"]:
         return redirect(url_for("index"))
     dest = f"{BACKUP_ROOT}/{udid}/{snapshot}"
-    enc_pw = dev.get("encryption_password") or ""
+    enc_pw = get_device_password(udid)
     ruid = session.get("uid", "")
     audit("restore_start", uid=ruid, udid=udid, snapshot=snapshot, src=request.remote_addr)
 
@@ -719,10 +904,11 @@ def device_restore(udid):
 def device_delete(udid):
     check_csrf()
     _require_owned(udid)
-    with _reg_lock:
+    with registry_locked():
         devices = load_devices()
         devices.pop(udid, None)
         save_devices(devices)
+        set_device_password(udid, "")
     audit("device_delete", uid=session.get("uid", ""), udid=udid, src=request.remote_addr)
     try:
         os.remove(os.path.join(LOCKDOWN_DIR, f"{udid}.plist"))

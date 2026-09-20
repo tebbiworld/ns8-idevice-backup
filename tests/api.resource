@@ -63,3 +63,17 @@ Restore the module from the cluster repository
     END
     ${out} =    Evaluate    json.loads(r'''${stdout}''')    modules=json
     RETURN    ${out['module_id']}
+
+Register the test device
+    [Documentation]    Upload a made-up pairing record with a backup password.
+    ...                127.0.0.1 as device address: a backup fails at once.
+    [Arguments]    ${mid}    ${udid}=00008130-00000000CITEST01    ${password}=Dev#Pass 9
+    Run on node    python3 -c 'import plistlib,base64,json; pl={"HostID":"ci","SystemBUID":"ci","HostCertificate":b"c","DeviceCertificate":b"d","UDID":"${udid}"}; json.dump({"content":base64.b64encode(plistlib.dumps(pl)).decode(),"name":"CI phone","ip":"127.0.0.1","encryption_password":"${password}","owner":"ci"},open("/tmp/ci-pairing.json","w"))'
+    Run on node    api-cli run module/${mid}/upload-pairing --data "$(cat /tmp/ci-pairing.json)"
+    Run on node    rm -f /tmp/ci-pairing.json
+
+Password hash of the test device
+    [Documentation]    sha256 of the stored backup password; the value itself is never printed.
+    [Arguments]    ${mid}    ${udid}=00008130-00000000CITEST01
+    ${sha} =    Run on node    runagent -m ${mid} python3 -c 'import json,hashlib; d=json.load(open("device-secrets.json")); print(hashlib.sha256(d["${udid}"]["encryption_password"].encode()).hexdigest())'
+    RETURN    ${sha.strip()}
