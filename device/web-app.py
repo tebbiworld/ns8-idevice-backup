@@ -400,24 +400,30 @@ def _do_backup(udid, ip, incremental, enc_pw, set_pw, uid=""):
         err = "" if ok else (result.get("error") or result.get("type") or "")
     except Exception as e:
         err = str(e)
-    with registry_locked():
-        devices = load_devices()
-        d = devices.get(udid)
-        if d is not None:
-            if ok:
-                d["last_backup"] = int(time.time())
-                d["last_status"] = "ok"
-                d["last_error"] = ""
-                if "device_encrypted" in result:
-                    d["encryption"] = bool(result["device_encrypted"])
-            else:
-                d["last_status"] = "failed"
-                d["last_error"] = (err or "backup failed")[:500]
-            devices[udid] = d
-            save_devices(devices)
-    audit("backup_done", uid=uid, udid=udid, result=("ok" if ok else "failed"),
-          attempts=result.get("attempts_used", ""), snapshot=result.get("snapshot", ""))
-    _running.pop(udid, None)
+    try:
+        with registry_locked():
+            devices = load_devices()
+            d = devices.get(udid)
+            if d is not None:
+                if ok:
+                    d["last_backup"] = int(time.time())
+                    d["last_status"] = "ok"
+                    d["last_error"] = ""
+                    if "device_encrypted" in result:
+                        d["encryption"] = bool(result["device_encrypted"])
+                else:
+                    d["last_status"] = "failed"
+                    d["last_error"] = (err or "backup failed")[:500]
+                devices[udid] = d
+                save_devices(devices)
+        audit("backup_done", uid=uid, udid=udid, result=("ok" if ok else "failed"),
+              attempts=result.get("attempts_used", ""), snapshot=result.get("snapshot", ""))
+    finally:
+        # Whatever happens above (a full disk while saving the registry, for
+        # example): the device must not stay marked as busy, otherwise
+        # start_backup refuses every later run and the UI shows a backup that
+        # is not running. The restore path does the same.
+        _running.pop(udid, None)
 
 
 def start_backup(udid, dev, uid=""):
