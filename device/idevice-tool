@@ -13,8 +13,19 @@
 #   ping   --udid U --ip A            connectivity + device info
 #   restore --udid U --ip A --dir D   restore snapshot dir D back onto the device
 #                                     (destructive; IDEVICE_RESTORE_PASSWORD if encrypted)
-#   backup --udid U --ip A --dir D    full backup into D; set encryption from
-#                                      $IDEVICE_SET_PASSWORD when --set-password
+#   backup --udid U --ip A --base B --mode full|incremental
+#                                     back up into a snapshot below B (= /data/backups/<udid>).
+#                                     An unfinished full snapshot is continued instead of
+#                                     starting a new one; a lost connection is retried
+#                                     (--attempts, --retry-pause). Encryption is set from
+#                                     $IDEVICE_SET_PASSWORD when --set-password is given.
+#                                     (--dir D [--incremental] still works: one fixed directory.)
+#   snapshots --base B --udid U       list the snapshots with their state (complete or not)
+#   overview [--root R]               the same for every device below R, plus the backup status
+#
+# While a backup runs, B/.status.json tells the UIs what is going on (state,
+# percent, attempt); B/.progress keeps the bare percentage as before. Every
+# attempt is reported as a JSON event line on stdout, the result is the last line.
 #
 # API verified against pymobiledevice3 11.14.0:
 #   create_using_tcp(hostname, autopair=False, pair_record=<dict>, port=62078)
@@ -23,12 +34,162 @@
 
 import argparse
 import asyncio
+import errno
+import fcntl
 import json
 import os
 import plistlib
 import sys
+import time
 
 LOCKDOWN_DIR = "/var/lib/lockdown"
+
+# ---------------------------------------------------------------- snapshots
+#
+# Layout: <base>/<snapshot>/<udid>/{Manifest.db,Manifest.plist,Status.plist,..}
+# <snapshot> is a UTC time stamp for full backups and "incremental" for the one
+# backup that mobilebackup2 updates in place.
+
+INCOMPLETE_MARK = ".incomplete"
+STATUS_FILE = ".status.json"
+PROGRESS_FILE = ".progress"
+LOCK_FILE = ".lock"
+# what mobilebackup2 itself needs to treat a directory as a finished backup
+REQUIRED_FILES = ("Manifest.plist", "Manifest.db", "Status.plist")
+# a status that was not refreshed for this long belongs to a dead process
+STATUS_STALE_AFTER = 120
+
+
+def snapshot_names(base):
+    try:
+        names = [n for n in os.listdir(base) if not n.startswith(".") and os.path.isdir(os.path.join(base, n))]
+    except OSError:
+        return []
+    return sorted(names)
+
+
+def is_complete(base, snapshot, udid):
+    """A snapshot counts as a backup only when the device finished it."""
+    snapdir = os.path.join(base, snapshot)
+    if os.path.exists(os.path.join(snapdir, INCOMPLETE_MARK)):
+        return False
+    devdir = os.path.join(snapdir, udid)
+    for name in REQUIRED_FILES:
+        path = os.path.join(devdir, name)
+        try:
+            if os.path.getsize(path) == 0:
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def pick_snapshot(base, udid, mode, now=None):
+    """Return (snapshot name, resumed). A full backup continues the newest
+    unfinished full snapshot instead of starting from an empty directory."""
+    if mode == "incremental":
+        return "incremental", os.path.isdir(os.path.join(base, "incremental"))
+    for name in reversed(snapshot_names(base)):
+        if name == "incremental":
+            continue
+        if not is_complete(base, name, udid):
+            return name, True
+        break  # the newest one is complete: start a new snapshot
+    return time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime(now)), False
+
+
+def write_json(path, data, mode=0o644):
+    tmp = f"{path}.{os.getpid()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    with os.fdopen(fd, "w") as fp:
+        json.dump(data, fp)
+    os.replace(tmp, path)
+
+
+def read_status(base):
+    """Status of the running (or last) backup; a stale "running" becomes idle."""
+    try:
+        with open(os.path.join(base, STATUS_FILE)) as fp:
+            st = json.load(fp)
+    except (OSError, ValueError):
+        return {"state": "idle"}
+    if st.get("state") in ("running", "waiting", "restoring") and time.time() - float(st.get("updated") or 0) > STATUS_STALE_AFTER:
+        st["state"] = "idle"
+    return st
+
+
+class Status:
+    """Keeps <base>/.status.json and <base>/.progress up to date."""
+
+    def __init__(self, base, events=False, **fields):
+        self.base = base
+        self.events = events  # also report every new percentage on stdout
+        self.data = dict(fields, percent=0, started=int(time.time()))
+
+    def update(self, **fields):
+        self.data.update(fields)
+        self.data["updated"] = int(time.time())
+        try:
+            write_json(os.path.join(self.base, STATUS_FILE), self.data)
+            if "percent" in fields:
+                with open(os.path.join(self.base, PROGRESS_FILE), "w") as fp:
+                    fp.write(f"{self.data['percent']}\n")
+        except OSError:
+            pass
+
+    def on_progress(self, pct):
+        try:
+            p = max(0, min(100, int(float(pct))))
+        except (TypeError, ValueError):
+            return
+        if p != self.data.get("percent"):
+            self.update(percent=p)
+            if self.events:
+                emit(event="progress", percent=p)
+
+    async def keepalive(self):
+        # refresh "updated" while large files move and no percentage changes
+        while True:
+            await asyncio.sleep(15)
+            self.update()
+
+
+def emit(**event):
+    print(json.dumps(event), flush=True)
+
+
+# errors that mean "the link dropped", worth another attempt
+RETRY_TYPES = {
+    "ConnectionTerminatedError", "ConnectionAbortedError", "ConnectionResetError", "ConnectionError",
+    "ConnectionFailedError", "BrokenPipeError", "IncompleteReadError", "TimeoutError", "SSLError",
+    "SSLEOFError", "SSLZeroReturnError", "EOFError", "StreamClosedError", "DeviceNotFoundError",
+}
+RETRY_ERRNOS = {errno.ECONNRESET, errno.EPIPE, errno.ETIMEDOUT, errno.EHOSTUNREACH, errno.ENETUNREACH,
+                errno.ECONNABORTED, errno.ECONNREFUSED, errno.ENETDOWN}
+
+
+def is_connection_error(exc):
+    if isinstance(exc, OSError) and exc.errno in (errno.ENOSPC, errno.EDQUOT, errno.EROFS, errno.EACCES):
+        return False
+    if type(exc).__name__ in RETRY_TYPES or isinstance(exc, (ConnectionError, TimeoutError, EOFError, asyncio.IncompleteReadError)):
+        return True
+    if isinstance(exc, OSError) and exc.errno in RETRY_ERRNOS:
+        return True
+    text = str(exc).lower()
+    return "connection lost" in text or "connection closed" in text or "heartbeat" in text
+
+
+def friendly_error(exc, ip, connected, attempts_used):
+    etype = type(exc).__name__
+    if not is_connection_error(exc):
+        return str(exc)[:1500] or etype
+    if not connected:
+        return (f"could not reach the device at {ip}:62078 ({etype}). Check the IP address, that WiFi "
+                f"lockdown is enabled on the device, and that the server can route to it.")
+    tries = "attempt" if attempts_used == 1 else "attempts"
+    return (f"the connection to the device was lost ({etype}) and did not come back within {attempts_used} {tries}. "
+            f"Keep the iPhone on the charger and on the WiFi, unlock it once and enter the passcode if it asks; "
+            f"what was transferred so far is kept and the next backup continues from it.")
 
 
 def load_pair_record(udid):
@@ -106,43 +267,160 @@ async def cmd_ping(args):
     print(json.dumps(info))
 
 
-async def cmd_backup(args):
+async def attempt_backup(args, snapdir, full, status, state):
+    """One connection to the device and one mobilebackup2 run. `state` records
+    how far it got, so the caller can tell "never reached" from "link dropped"."""
     from pymobiledevice3.services.mobilebackup2 import Mobilebackup2Service
     ld, hb = await connect(args.udid, args.ip)
-    os.makedirs(args.dir, exist_ok=True)
-    # The DEVICE is the source of truth for whether backups are encrypted, not
-    # the module registry (which could be stale). Only enable encryption when the
-    # device does NOT already have it on; enabling it again with an empty old
-    # password fails with MBErrorDomain/207 on an already-encrypted device.
+    state["connected"] = True
     try:
-        already_encrypted = bool(await _value(ld, domain="com.apple.mobile.backup", key="WillEncrypt"))
-    except Exception:
-        already_encrypted = False
-    enabled_encryption = False
-    async with Mobilebackup2Service(ld) as svc:
-        if args.set_password and not already_encrypted:
-            pw = os.environ.get("IDEVICE_SET_PASSWORD", "")
-            if pw:
-                # old='' turns encryption ON with the new password (device-side)
-                await svc.change_password(backup_directory=args.dir, old="", new=pw)
-                enabled_encryption = True
-                already_encrypted = True
-        progress_file = os.path.join(os.path.dirname(args.dir.rstrip("/")), ".progress")
-        last = [-1]
+        # The DEVICE is the source of truth for whether backups are encrypted, not
+        # the module registry (which could be stale). Only enable encryption when the
+        # device does NOT already have it on; enabling it again with an empty old
+        # password fails with MBErrorDomain/207 on an already-encrypted device.
+        try:
+            state["device_encrypted"] = bool(await _value(ld, domain="com.apple.mobile.backup", key="WillEncrypt"))
+        except Exception:
+            state["device_encrypted"] = False
+        async with Mobilebackup2Service(ld) as svc:
+            if args.set_password and not state["device_encrypted"]:
+                pw = os.environ.get("IDEVICE_SET_PASSWORD", "")
+                if pw:
+                    # old='' turns encryption ON with the new password (device-side)
+                    await svc.change_password(backup_directory=snapdir, old="", new=pw)
+                    state["encryption_enabled"] = True
+                    state["device_encrypted"] = True
+            await svc.backup(full=full, backup_directory=snapdir, progress_callback=status.on_progress)
+    finally:
+        hb.cancel()
 
-        def on_progress(pct):
+
+async def cmd_backup(args):
+    if args.base:
+        base = args.base.rstrip("/")
+        mode = args.mode
+        os.makedirs(base, exist_ok=True)
+        snapshot, resumed = pick_snapshot(base, args.udid, mode)
+    else:
+        # fixed directory given by the caller (the interface of 1.3.0 and older)
+        snapdir = args.dir.rstrip("/")
+        base, snapshot = os.path.dirname(snapdir), os.path.basename(snapdir)
+        mode = "incremental" if args.incremental else "full"
+        resumed = os.path.isdir(snapdir)
+        os.makedirs(base, exist_ok=True)
+
+    # one backup per device at a time, whoever started it (portal, cluster-admin, timer)
+    lock = open(os.path.join(base, LOCK_FILE), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock.close()
+        raise AlreadyRunning("a backup of this device is already running")
+    try:
+        await _locked_backup(args, base, snapshot, mode, resumed)
+    finally:
+        lock.close()
+
+
+async def _locked_backup(args, base, snapshot, mode, resumed):
+    snapdir = os.path.join(base, snapshot)
+    started_resumed = resumed
+    os.makedirs(snapdir, exist_ok=True)
+    marker = os.path.join(snapdir, INCOMPLETE_MARK)
+    if mode == "full":
+        # the snapshot does not count (restore list, retention) until the device finished it
+        write_json(marker, {"started": int(time.time()), "resumed": resumed})
+    # Forcing a full backup makes mobilebackup2 drop the metadata of the directory;
+    # a continued snapshot keeps it so the device can build on what is there.
+    full = mode == "full" and not resumed
+    attempts = max(1, args.attempts)
+    status = Status(base, events=args.progress_events, snapshot=snapshot, mode=mode, resumed=resumed,
+                    attempts=attempts, pid=os.getpid())
+    keepalive = asyncio.create_task(status.keepalive())
+    state = {"connected": False, "device_encrypted": False, "encryption_enabled": False}
+    used = 0
+    try:
+        for attempt in range(1, attempts + 1):
+            used = attempt
+            status.update(state="running", attempt=attempt, percent=0, error="")
+            emit(event="attempt", attempt=attempt, attempts=attempts, snapshot=snapshot, mode=mode, resumed=resumed)
             try:
-                p = int(float(pct))
-            except (TypeError, ValueError):
-                return
-            if p != last[0]:
-                last[0] = p
-                with open(progress_file, "w") as fp:
-                    fp.write(f"{p}\n")
+                await attempt_backup(args, snapdir, full, status, state)
+                break
+            except Exception as exc:
+                retry = is_connection_error(exc) and state["connected"] and attempt < attempts
+                if not retry:
+                    exc.idevice_message = friendly_error(exc, args.ip, state["connected"], attempt)
+                    raise
+                # what arrived so far stays; do not force a full backup over it again
+                full = False
+                resumed = True
+                emit(event="retry", attempt=attempt, attempts=attempts, wait=args.retry_pause,
+                     type=type(exc).__name__, error=str(exc)[:300])
+                status.update(state="waiting", error=str(exc)[:300], resumed=True)
+                await asyncio.sleep(args.retry_pause)
+    except Exception as exc:
+        status.update(state="failed", error=getattr(exc, "idevice_message", str(exc))[:500])
+        if not state["connected"] and not started_resumed:
+            # the device was never reached: an empty snapshot is not worth keeping
+            import shutil
+            shutil.rmtree(snapdir, ignore_errors=True)
+        raise
+    finally:
+        keepalive.cancel()
+    try:
+        os.remove(marker)
+    except OSError:
+        pass
+    pruned = prune(base, args.udid, snapshot, args.retention) if mode == "full" else []
+    status.update(state="done", percent=100, error="")
+    print(json.dumps({"ok": True, "dir": snapdir, "snapshot": snapshot, "mode": mode, "resumed": resumed,
+                      "attempts_used": used, "pruned": pruned, "encryption_enabled": state["encryption_enabled"],
+                      "device_encrypted": state["device_encrypted"]}))
 
-        await svc.backup(full=not args.incremental, backup_directory=args.dir, progress_callback=on_progress)
-    hb.cancel()
-    print(json.dumps({"ok": True, "dir": args.dir, "encryption_enabled": enabled_encryption, "device_encrypted": already_encrypted}))
+
+class AlreadyRunning(RuntimeError):
+    pass
+
+
+def prune(base, udid, current, retention):
+    """After a finished full backup: drop unfinished full snapshots (the one that
+    just succeeded replaces them) and, when a retention is given, the oldest
+    finished ones beyond it. Only finished snapshots count towards the retention."""
+    import shutil
+    removed = []
+    complete = []
+    for name in snapshot_names(base):
+        if name == "incremental":
+            continue
+        if is_complete(base, name, udid):
+            complete.append(name)
+        elif name != current:
+            removed.append(name)
+    if retention and retention > 0:
+        removed += [n for n in complete[:-retention] if n != current]
+    for name in removed:
+        shutil.rmtree(os.path.join(base, name), ignore_errors=True)
+    return removed
+
+
+def device_overview(base, udid):
+    """Snapshots (newest first) and backup status of one device directory."""
+    return {"snapshots": [{"snapshot": n, "complete": is_complete(base, n, udid)} for n in reversed(snapshot_names(base))],
+            "status": read_status(base)}
+
+
+def cmd_snapshots(args):
+    print(json.dumps(dict(device_overview(args.base.rstrip("/"), args.udid), ok=True)))
+
+
+def cmd_overview(args):
+    root = args.root.rstrip("/")
+    try:
+        udids = sorted(n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n)))
+    except OSError:
+        udids = []
+    print(json.dumps({"ok": True, "devices": {u: device_overview(os.path.join(root, u), u) for u in udids}}))
 
 
 async def cmd_restore(args):
@@ -153,27 +431,27 @@ async def cmd_restore(args):
     from pymobiledevice3.services.mobilebackup2 import Mobilebackup2Service
     ld, hb = await connect(args.udid, args.ip)
     pw = os.environ.get("IDEVICE_RESTORE_PASSWORD", "")
-    progress_file = os.path.join(os.path.dirname(args.dir.rstrip("/")), ".progress")
-    last = [-1]
-
-    def on_progress(pct):
-        try:
-            p = int(float(pct))
-        except (TypeError, ValueError):
-            return
-        if p != last[0]:
-            last[0] = p
-            with open(progress_file, "w") as fp:
-                fp.write(f"{p}\n")
+    base = os.path.dirname(args.dir.rstrip("/"))
+    status = Status(base, snapshot=os.path.basename(args.dir.rstrip("/")), mode="restore", attempts=1, pid=os.getpid())
+    status.update(state="restoring", attempt=1, percent=0, error="")
+    keepalive = asyncio.create_task(status.keepalive())
+    on_progress = status.on_progress
 
     source = getattr(args, "source", "") or args.udid
-    async with Mobilebackup2Service(ld) as svc:
-        # copy=True keeps the on-disk backup; source selects which device's backup
-        # inside backup_directory to write (same-device: source == udid; cross-device:
-        # source is the ORIGINAL device's udid). password required iff encrypted.
-        await svc.restore(backup_directory=args.dir, source=source, password=pw,
-                          copy=True, reboot=True, progress_callback=on_progress)
-    hb.cancel()
+    try:
+        async with Mobilebackup2Service(ld) as svc:
+            # copy=True keeps the on-disk backup; source selects which device's backup
+            # inside backup_directory to write (same-device: source == udid; cross-device:
+            # source is the ORIGINAL device's udid). password required iff encrypted.
+            await svc.restore(backup_directory=args.dir, source=source, password=pw,
+                              copy=True, reboot=True, progress_callback=on_progress)
+    except Exception as exc:
+        status.update(state="failed", error=str(exc)[:500])
+        raise
+    finally:
+        keepalive.cancel()
+        hb.cancel()
+    status.update(state="done", percent=100, error="")
     print(json.dumps({"ok": True, "dir": args.dir, "restored": True}))
 
 
@@ -186,23 +464,42 @@ def main():
     b = sub.add_parser("backup")
     b.add_argument("--udid", required=True)
     b.add_argument("--ip", required=True)
-    b.add_argument("--dir", required=True)
+    b.add_argument("--base", default="", help="per-device directory, e.g. /data/backups/<udid>; the snapshot is chosen here")
+    b.add_argument("--mode", choices=("full", "incremental"), default="full")
+    b.add_argument("--dir", default="", help="fixed snapshot directory instead of --base (old interface)")
+    b.add_argument("--incremental", action="store_true", help="with --dir: incremental update of that directory")
     b.add_argument("--set-password", action="store_true")
-    b.add_argument("--incremental", action="store_true", help="incremental update of the backup dir (full=False)")
+    b.add_argument("--attempts", type=int, default=int(os.environ.get("IDEVICE_BACKUP_ATTEMPTS", "3") or 3),
+                   help="how often a backup is tried when the connection drops (default 3)")
+    b.add_argument("--retention", type=int, default=0,
+                   help="after a finished full backup keep this many finished full snapshots (0 = keep all)")
+    b.add_argument("--progress-events", action="store_true", help="report every new percentage as an event line")
+    b.add_argument("--retry-pause", type=float, default=float(os.environ.get("IDEVICE_RETRY_PAUSE", "60") or 60),
+                   help="seconds to wait before the next attempt (default 60)")
+    sn = sub.add_parser("snapshots")
+    sn.add_argument("--udid", required=True)
+    sn.add_argument("--base", required=True)
+    ov = sub.add_parser("overview")
+    ov.add_argument("--root", default="/data/backups")
     r = sub.add_parser("restore")
     r.add_argument("--udid", required=True)
     r.add_argument("--ip", required=True)
     r.add_argument("--dir", required=True)
     r.add_argument("--source", default="", help="UDID of the backup folder inside --dir (cross-device restore); default = --udid")
     args = ap.parse_args()
+    if args.cmd == "backup" and not (args.base or args.dir):
+        ap.error("backup needs --base or --dir")
     try:
+        if args.cmd in ("snapshots", "overview"):
+            {"snapshots": cmd_snapshots, "overview": cmd_overview}[args.cmd](args)
+            return
         dispatch = {"ping": cmd_ping, "backup": cmd_backup, "restore": cmd_restore}
         asyncio.run(dispatch[args.cmd](args))
     except Exception as e:
         if os.environ.get("IDEVICE_DEBUG"):
             import traceback
             traceback.print_exc()
-        print(json.dumps({"ok": False, "error": str(e)[:2000], "type": type(e).__name__}))
+        print(json.dumps({"ok": False, "error": getattr(e, "idevice_message", str(e))[:2000], "type": type(e).__name__}))
         sys.exit(1)
 
 
