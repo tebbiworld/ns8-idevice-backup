@@ -12,6 +12,7 @@
 
 import json
 import os
+import secrets
 import subprocess
 import sys
 import urllib.parse
@@ -128,6 +129,9 @@ selfservice_restore = _bool("selfservice_restore", "SELFSERVICE_RESTORE", True)
 agent.set_env("SELFSERVICE_RESTORE", "true" if selfservice_restore else "false")
 ldap_domain = _str("ldap_domain", "LDAP_DOMAIN")
 agent.set_env("LDAP_DOMAIN", ldap_domain)
+# never hand the portal an empty session secret (an instance whose secret was
+# not migrated or generated yet): create one instead
+modsecrets.ensure({"SESSION_SECRET": secrets.token_hex(32)})
 write_envfile("web.env", {
     "SESSION_SECRET": modsecrets.get("SESSION_SECRET"),
     "APP_TITLE": "iOS Device Backup",
@@ -135,6 +139,8 @@ write_envfile("web.env", {
     "STATE_DIR": "/state",
     "LDAP_DOMAIN": ldap_domain,
     "SELFSERVICE_RESTORE": "true" if selfservice_restore else "false",
+    # backups started in the portal prune finished snapshots like run-backup does
+    "RETENTION": env.get("RETENTION", "3"),
 })
 
 # Traefik route for the self-service host
