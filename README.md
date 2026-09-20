@@ -65,9 +65,27 @@ address, optionally set a backup encryption password, and press
 If you set a backup encryption password, the module turns on device-side backup
 encryption for that device on the first backup. iOS then encrypts the backup on
 the device; the password is **stored on the iPhone** and is required to restore.
-The module also keeps the password in its own state (readable by the node
-administrator) so scheduled backups and restores can use it. Store it safely —
-if it is lost, the encrypted backup cannot be restored.
+The module also keeps the password so scheduled backups and restores can use
+it: in `state/device-secrets.json` (mode 0600, part of the module backup), apart
+from the device registry, and never returned by an action or shown in a page.
+Store it safely — if it is lost, the encrypted backup cannot be restored.
+
+## Long backups, lost connections, progress
+
+A first full backup over WiFi can take more than an hour. While it runs, the
+portal and cluster-admin show the percentage reported by the device.
+
+- If the connection drops, the module waits 60 s and tries again, up to three
+  attempts, in the same snapshot. Keep the iPhone on the charger and on the
+  WiFi; without power iOS puts the WiFi sync to sleep.
+- A full backup that still fails is **kept as unfinished** instead of deleted.
+  It cannot be restored and does not count towards the retention; the next
+  backup of the device continues in it and it disappears once a backup
+  finishes. How much the device reuses is up to iOS: in **incremental** mode an
+  interrupted update continues from the last finished state, a very first
+  backup may be transferred again. For devices on a weak link, incremental mode
+  is the better choice once one backup has finished.
+- Only one backup per device runs at a time, whoever started it.
 
 ## Backup storage and the NS8 backup
 
@@ -146,6 +164,13 @@ The same operation is available inside the engine container:
 `device/Containerfile` builds an image with pymobiledevice3 (lzfse compiled in
 a builder stage); `device/idevice-tool` is the backup helper the module runs
 inside the container.
+
+Tests without an iPhone: `python3 device/tests/test_backup_logic.py` (continue,
+retry, retention, lock, status; fake device) and `python3 tests/unit/test_devreg.py`
+(password migration) run from a checkout; `device/tests/test_portal.py` needs
+flask and runs in the image (`podman exec idevice-backup python3
+/opt/idevice-tests/test_portal.py`). The Robot suite in `tests/` runs all of
+them on a real node.
 
 ## License
 
