@@ -5,16 +5,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# Carry the global options of the backed-up instance over to the new one. The
-# device registry (state/devices.json) and the pairing records
-# (volumes/idevice-lockdown) are restored by restic from state-include.conf.
+# Copy the non-secret settings of the original instance. Secrets come back with
+# the restored state/passwords.env; a backup taken with an older module version
+# still carries them in the environment, so they are moved to the file here.
 
 import json
 import sys
 
 import agent
+import modsecrets
 
 request = json.load(sys.stdin)
 env = request["environment"]
-keep = ["RETENTION"]
-agent.mset_env({k: env[k] for k in keep if k in env})
+
+KEEP = ["RETENTION", "IDEVICE_INCLUDE_BACKUPS", "AUTOBACKUP_ENABLED", "AUTOBACKUP_INTERVAL_HOURS",
+        "SELFSERVICE_HOST", "SELFSERVICE_PATH", "SELFSERVICE_RESTORE", "TRAEFIK_HTTP2HTTPS", "TRAEFIK_LETS_ENCRYPT",
+        "LDAP_ENABLED", "LDAP_URL", "LDAP_BASE_DN", "LDAP_BIND_DN", "LDAP_USER_ATTRIBUTE", "LDAP_GROUP", "LDAP_DOMAIN"]
+SECRETS = ["SESSION_SECRET", "LDAP_BIND_PASSWORD"]
+
+agent.mset_env({k: env[k] for k in KEEP if k in env})
+
+legacy = {k: env[k] for k in SECRETS if env.get(k)}
+if legacy:
+    modsecrets.write(legacy)
+    print("restored legacy secrets from the backup environment into passwords.env", file=sys.stderr)

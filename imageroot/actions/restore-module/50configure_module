@@ -5,15 +5,48 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# Re-apply the options and start the engine on the restored volumes (pairing
-# records and device backups).
+# Re-apply the restored settings: every field configure-module accepts is
+# passed, including the self-service portal and the directory login. The bind
+# password is left blank on purpose: blank = keep the restored value.
 
 import os
+import sys
 
 import agent
 import agent.tasks
 
 env = os.environ
-data = {"retention": int(env.get("RETENTION", "3"))}
+
+
+def flag(name, default):
+    return env.get(name, default).lower() == "true"
+
+
+data = {
+    "retention": int(env.get("RETENTION", "3")),
+    "include_backups": flag("IDEVICE_INCLUDE_BACKUPS", "false"),
+    "autobackup_enabled": flag("AUTOBACKUP_ENABLED", "false"),
+    "autobackup_interval_hours": int(env.get("AUTOBACKUP_INTERVAL_HOURS", "24") or 24),
+    "selfservice_host": env.get("SELFSERVICE_HOST", ""),
+    "selfservice_path": env.get("SELFSERVICE_PATH", ""),
+    "selfservice_restore": flag("SELFSERVICE_RESTORE", "true"),
+    "http2https": flag("TRAEFIK_HTTP2HTTPS", "True"),
+    "lets_encrypt": flag("TRAEFIK_LETS_ENCRYPT", "False"),
+    "ldap_enabled": flag("LDAP_ENABLED", "false"),
+    "ldap_url": env.get("LDAP_URL", ""),
+    "ldap_base_dn": env.get("LDAP_BASE_DN", ""),
+    "ldap_bind_dn": env.get("LDAP_BIND_DN", ""),
+    "ldap_bind_password": "",
+    "ldap_user_attribute": env.get("LDAP_USER_ATTRIBUTE", "sAMAccountName"),
+    "ldap_group": env.get("LDAP_GROUP", ""),
+    "ldap_domain": env.get("LDAP_DOMAIN", ""),
+}
+if "TRAEFIK_LETS_ENCRYPT" not in env:
+    # A backup taken with a module version that did not record the setting: say
+    # so instead of silently asserting "off". The route is created without a
+    # certificate request; enable Let's Encrypt again in the settings.
+    data.pop("lets_encrypt", None)
+    print(agent.SD_WARNING + "the backup does not tell whether Let's Encrypt was enabled: the route is restored without it", file=sys.stderr)
+
 response = agent.tasks.run(agent_id=env["AGENT_ID"], action="configure-module", data=data)
 agent.assert_exp(response["exit_code"] == 0, "The configure-module subtask failed!")

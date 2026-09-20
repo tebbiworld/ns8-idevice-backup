@@ -14,6 +14,8 @@ import os
 import subprocess
 import sys
 
+import modsecrets  # noqa: E402
+
 env = os.environ
 CONTAINER = "idevice-backup"
 
@@ -91,7 +93,7 @@ config = {
     "ldap_bind_dn": env.get("LDAP_BIND_DN", ""),
     "ldap_user_attribute": env.get("LDAP_USER_ATTRIBUTE", "sAMAccountName"),
     "ldap_group": env.get("LDAP_GROUP", ""),
-    "ldap_bind_password_set": bool(env.get("LDAP_BIND_PASSWORD", "")),
+    "ldap_bind_password_set": bool(modsecrets.get("LDAP_BIND_PASSWORD")),
     "selfservice_restore": env.get("SELFSERVICE_RESTORE", "true").strip().lower() in ("1","true","yes","on"),
     "ldap_domain": env.get("LDAP_DOMAIN", ""),
     "container_running": running,
