@@ -29,24 +29,10 @@ import sys
 import time
 
 import agent
+import devreg
 
 CONTAINER = "idevice-backup"
 UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
-
-
-def load_devices():
-    try:
-        with open("devices.json") as fp:
-            return json.load(fp)
-    except FileNotFoundError:
-        return {}
-
-
-def save_devices(devices):
-    with open("devices.json.tmp", "w") as fp:
-        json.dump(devices, fp, indent=2)
-    import os
-    os.replace("devices.json.tmp", "devices.json")
 
 
 data = json.load(sys.stdin)
@@ -91,29 +77,30 @@ if proc.returncode != 0:
     print(agent.SD_ERR + "could not store the pairing file (is the module running?): " + err, file=sys.stderr)
     sys.exit(1)
 
-devices = load_devices()
-d = devices.get(udid, {})
-d.update({
-    "udid": udid,
-    "name": name or d.get("name") or udid,
-    "ip": ip or d.get("ip", ""),
-    "paired_at": int(time.time()),
-    "has_wifi_mac": "WiFiMACAddress" in pl,
-    "has_escrow_bag": "EscrowBag" in pl,
-})
-d.setdefault("last_backup", 0)
-d.setdefault("last_status", "")
-d.setdefault("encryption", False)
-d.setdefault("backup_mode", "full")
-if owner:
-    d["owner"] = owner
-    if domain:
-        d["domain"] = domain
-if enc_pw is not None and str(enc_pw).strip():
-    # stored to enable device-side backup encryption on the first backup and as
-    # a reference for restore; kept in module state (root-readable) only.
-    d["encryption_password"] = str(enc_pw)
-devices[udid] = d
-save_devices(devices)
+with devreg.locked():
+    devices = devreg.load_devices()
+    d = devices.get(udid, {})
+    d.update({
+        "udid": udid,
+        "name": name or d.get("name") or udid,
+        "ip": ip or d.get("ip", ""),
+        "paired_at": int(time.time()),
+        "has_wifi_mac": "WiFiMACAddress" in pl,
+        "has_escrow_bag": "EscrowBag" in pl,
+    })
+    d.setdefault("last_backup", 0)
+    d.setdefault("last_status", "")
+    d.setdefault("encryption", False)
+    d.setdefault("backup_mode", "full")
+    if owner:
+        d["owner"] = owner
+        if domain:
+            d["domain"] = domain
+    if enc_pw is not None and str(enc_pw).strip():
+        # used to switch on device-side backup encryption with the first backup
+        # and as the reference for a restore: state/device-secrets.json (0600)
+        devreg.set_password(udid, str(enc_pw))
+    devices[udid] = d
+    devreg.save_devices(devices)
 
 json.dump({"udid": udid, "name": d["name"], "ip": d["ip"]}, fp=sys.stdout)

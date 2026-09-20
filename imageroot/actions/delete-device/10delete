@@ -9,12 +9,12 @@
 # stored backups.
 
 import json
-import os
 import re
 import subprocess
 import sys
 
 import agent
+import devreg
 
 CONTAINER = "idevice-backup"
 UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
@@ -32,14 +32,10 @@ if delete_backups:
 subprocess.run(["podman", "exec", CONTAINER, "sh", "-c", "rm -rf " + " ".join(f"'{p}'" for p in paths)],
                capture_output=True)
 
-try:
-    with open("devices.json") as fp:
-        devices = json.load(fp)
-except FileNotFoundError:
-    devices = {}
-devices.pop(udid, None)
-with open("devices.json.tmp", "w") as fp:
-    json.dump(devices, fp, indent=2)
-os.replace("devices.json.tmp", "devices.json")
+with devreg.locked():
+    devices = devreg.load_devices()
+    devices.pop(udid, None)
+    devreg.save_devices(devices)
+    devreg.forget(udid)
 
 json.dump({"udid": udid, "deleted_backups": delete_backups}, fp=sys.stdout)

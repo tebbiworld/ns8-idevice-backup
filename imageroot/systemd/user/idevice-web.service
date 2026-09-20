@@ -20,6 +20,8 @@ Restart=always
 TimeoutStartSec=120
 TimeoutStopSec=20
 ExecStartPre=/bin/rm -f %t/idevice-web.pid %t/idevice-web.ctr-id
+# device passwords belong in state/device-secrets.json (0600), also after a restore of an old backup
+ExecStartPre=-runagent migrate-device-secrets
 ExecStart=/usr/bin/podman run \
     --conmon-pidfile %t/idevice-web.pid \
     --cidfile %t/idevice-web.ctr-id \
