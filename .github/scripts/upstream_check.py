@@ -75,6 +75,9 @@ else:
     newest_tag = max(tags, key=numeric)
     current_tag = pinned(images[0]).lstrip(":")
     newer = regex.match(current_tag) is not None and numeric(newest_tag) > numeric(current_tag)
+    if images[0].startswith("github.com/"):
+        # the pin is the bare version (pip, build args), a git tag may carry a "v"
+        newest_tag = regex.match(newest_tag).group("ver")
     current, newest = current_tag, newest_tag
     bumps = [(img, ":" + current_tag, ":" + newest_tag, "") for img in images]
 

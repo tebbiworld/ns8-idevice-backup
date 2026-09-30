@@ -26,7 +26,7 @@ permissions:
 
 env:
   UPSTREAM_IMAGES: "github.com/doronz88/pymobiledevice3"
-  TAG_REGEX: '^(?P<ver>\d+\.\d+\.\d+)$'
+  TAG_REGEX: '^v?(?P<ver>\d+\.\d+\.\d+)$'
   UPSTREAM_NAME: "pymobiledevice3"
   PIN_FILES: "build-images.sh"
   MIN_DAYS: "42"
