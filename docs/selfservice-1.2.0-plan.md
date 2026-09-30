@@ -45,7 +45,7 @@ service inside the module that enforces per-user ownership itself.
   WebUI and SageMath use.
 - Login flow: service-bind → search the user → re-bind as the user to verify the
   password → issue a session cookie.
-- **AD requires LDAPS on 636** (plaintext 389 is rejected on `ad.ebbinghaus.world`);
+- **AD requires LDAPS on 636** (plaintext 389 is rejected on `ad.example.org`);
   the module must use `ldaps://…:636` and trust the domain CA.
 - **Configuration:** the instance is bound to one user domain (a setting, like the
   other LDAP modules). Multi-domain is a later option, not v1.2.0.
