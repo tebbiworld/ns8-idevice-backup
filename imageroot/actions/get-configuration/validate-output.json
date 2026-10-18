@@ -153,6 +153,15 @@
             "items": {
                 "type": "string"
             }
+        },
+        "notify_mail_to": {
+            "type": "string"
+        },
+        "notify_owners": {
+            "type": "boolean"
+        },
+        "notify_overdue_days": {
+            "type": "integer"
         }
     }
 }

@@ -66,3 +66,11 @@ for udid, dev in devices.items():
 
 if due == 0:
     print("autobackup: nothing due", file=sys.stderr)
+
+# Mail about devices without a successful backup for too long (optional,
+# pypkg/backupnotify.py); reload the registry, the runs above updated it.
+try:
+    import backupnotify
+    backupnotify.check(load_devices())
+except Exception as exc:
+    print(f"autobackup: overdue check failed ({type(exc).__name__}: {exc})", file=sys.stderr)

@@ -101,6 +101,11 @@ config = {
     "container_running": running,
     "devices": devices,
 }
+# overdue-backup mail (pypkg/backupnotify.py)
+import backupnotify  # noqa: E402
+_notify = backupnotify.settings()
+config.update({"notify_mail_to": _notify["mail_to"], "notify_owners": _notify["owners"],
+               "notify_overdue_days": _notify["overdue_days"]})
 # ldap_* settings and user_domains, never the bind password
 config.update(ldapsettings.configuration())
 json.dump(config, fp=sys.stdout)

@@ -54,6 +54,7 @@ buildah config --entrypoint=/ \
     --label="org.nethserver.authorizations=traefik@node:routeadm node:portsadm cluster:accountconsumer" \
     --label="org.nethserver.images=${runtime_images[*]}" \
     --label="org.nethserver.volumes=idevice-data" \
+    --label="org.nethserver.min-core=3.22.0" \
     "${container}"
 buildah commit "${container}" "${repobase}/${reponame}"
 
