@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 tebbi
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# The domain's LDAP settings changed (e.g. a new bind password or provider):
+# restart the portal, bin/discover-ldap reads them again at start.
+
+import json
+import os
+import sys
+
+import agent
+
+event = json.load(sys.stdin)
+if (os.environ.get("LDAP_ENABLED") != "true" or os.environ.get("LDAP_SOURCE", "domain") != "domain"
+        or event.get("domain") != os.environ.get("LDAP_DOMAIN")):
+    sys.exit(0)
+agent.run_helper("systemctl", "--user", "-T", "try-restart", "idevice-web.service")

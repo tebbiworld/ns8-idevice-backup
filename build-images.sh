@@ -51,7 +51,7 @@ buildah add "${container}" ui/dist /ui
 buildah config --entrypoint=/ \
     --label="org.nethserver.rootfull=0" \
     --label="org.nethserver.tcp-ports-demand=1" \
-    --label="org.nethserver.authorizations=traefik@node:routeadm node:portsadm" \
+    --label="org.nethserver.authorizations=traefik@node:routeadm node:portsadm cluster:accountconsumer" \
     --label="org.nethserver.images=${runtime_images[*]}" \
     --label="org.nethserver.volumes=idevice-data" \
     "${container}"

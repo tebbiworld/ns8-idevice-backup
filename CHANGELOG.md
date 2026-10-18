@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Portal login with a user domain of the cluster.** The self-service portal can check logins against an NS8 user domain (recommended): pick the domain and, optionally, a group from a list. Nothing but the domain name is stored; the portal reaches the directory through the node's ldapproxy and follows a new bind password or a DC move by itself (event `user-domain-changed`). New authorization `cluster:accountconsumer`.
+- **An LDAP server of its own** stays available as the advanced choice, now with StartTLS, a certificate check (on by default), OpenLDAP besides Active Directory and nested AD groups. The directory settings look and work the same as in the other tebbiworld modules (shared code: `ldapauth.py`, `ldapsettings.py`, `LdapLogin.vue`).
+- **Favicon** for the portal (module logo).
+
+### Changed
+
+- Existing installations keep their login: the update turns the stored settings into an "LDAP server of its own" without certificate check, as before. Switch to the user domain in the settings to drop the stored bind password.
+- The portal runs in the host network on the node loopback (needed to reach the ldapproxy); Traefik still publishes it under the same host name.
+- Disabled AD accounts can no longer log in to the portal.
+
+### Security
+
+- **Failed logins are throttled:** five failures for an account or from one address within 15 minutes block further attempts for that time (audit entry `throttled`), each failure waits a second.
+- Audit log entries can no longer be forged with line breaks in the user name.
+- Uploads to the portal are limited to 1 MB (a pairing record has a few kB).
+
+## 1.4.1 — 2026-09-23
+
+### Changed
+
+- CI only: QEMU tests as a workflow of their own, registry cleanup with the right token, upstream tags with a `v` prefix accepted by the automatic release check. No change to the module.
+
 ## 1.4.0 — 2026-09-20
 
 Long backups over a weak WiFi link: progress you can see, a lost connection that is retried, and nothing thrown away on failure. Found with an iPhone that needed more than an hour for a full backup and lost the connection at 82 %.

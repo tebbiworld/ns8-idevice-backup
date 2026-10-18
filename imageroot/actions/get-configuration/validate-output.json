@@ -131,6 +131,28 @@
         },
         "selfservice_path": {
             "type": "string"
+        },
+        "ldap_source": {
+            "type": "string",
+            "enum": [
+                "domain",
+                "custom"
+            ]
+        },
+        "ldap_schema": {
+            "type": "string"
+        },
+        "ldap_start_tls": {
+            "type": "boolean"
+        },
+        "ldap_tls_verify": {
+            "type": "boolean"
+        },
+        "user_domains": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
         }
     }
 }

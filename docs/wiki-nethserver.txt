@@ -73,16 +73,20 @@ In the module's **Settings** page, section **Self-service portal**:
   * **Request a Let's Encrypt certificate** — obtain a certificate for the portal host.
   * **Let users restore their own devices** — a restore overwrites a device and is irreversible. Off keeps restore admin-only while users can still back up.
 
-Section **Directory login (AD / LDAP)** — the portal binds directly to your directory with an admin-provided service account (no user-domain join needed):
-  * **Enable directory login** — required for the portal.
-  * **LDAP URL** — use ''%%ldaps://host:636%%'' for Active Directory; plain ''%%ldap://host:389%%'' is usually refused by AD.
-  * **Base DN** — e.g. ''%%DC=ad,DC=example,DC=org%%''.
-  * **Bind DN / service account** and **Bind password** — a read-only account used to look users up (leave the password empty on a later save to keep the stored one).
-  * **Login attribute** — what users type as their login: ''sAMAccountName'' for AD, ''uid'' for OpenLDAP.
-  * **Owner domain label** — stored with each device's owner, usually the AD domain (e.g. ''ad.example.org'').
-  * **Restrict to group DN (optional)** — only members of this group may sign in.
+Section **Directory login (AD / LDAP)** — required for the portal; switch on **Enable directory login** and choose where the accounts come from:
+  * **User domain of this cluster** (recommended) — pick the domain and, optionally, a **group** from the list read from the domain (nested AD groups count). Nothing but the domain name is stored: the portal uses the node's ldapproxy and follows a new bind password or a moved DC by itself. The domain is also recorded as owner domain of new devices.
+  * **LDAP server of its own** (advanced) — only for a directory that is not a user domain of the cluster (NS8 can also add an external AD/LDAP under //Domains and users//, then it appears in the first choice):
+    * **LDAP server URL** — ''%%ldaps://host:636%%'', or ''%%ldap://host:389%%'' with **StartTLS**; plain LDAP is usually refused by AD.
+    * **Verify the server certificate** — on by default (system CAs). Installations from before 1.5.0 keep it off as before; turn it on once the DC has a trusted certificate.
+    * **Directory type** — Active Directory / Samba or OpenLDAP (posixAccount).
+    * **Base DN** — e.g. ''%%DC=ad,DC=example,DC=org%%''.
+    * **Bind DN** and **Bind password** — a read-only service account used to look users up; the password is stored outside the module environment, leave it empty on a later save to keep it.
+    * **Login attribute** — empty means ''sAMAccountName'' (AD) or ''uid'' (OpenLDAP).
+    * **Group** — optional group name or DN; only its members may sign in.
 
-The portal runs as a second container from the same image, needs one TCP port (published on the node loopback for Traefik) and the ''traefik@node:routeadm'' authorization; both are requested from the image on install. Saving the global options never clears these portal/LDAP settings.
+Five failed logins for an account or from one address block further attempts for 15 minutes.
+
+The portal runs as a second container from the same image in the host network, listening on the node loopback for Traefik; it needs one TCP port and the ''traefik@node:routeadm'' and ''cluster:accountconsumer'' authorizations; both are requested from the image on install. Saving the global options never clears these portal/LDAP settings.
 
 =====Automatic backups=====
 Turn on **Automatic backups** in the module settings and set an interval in hours. An hourly timer then backs up every device whose last backup is older than the interval, using each device's mode (full or incremental). A device that is asleep or unreachable simply fails that run and is retried on the next hourly tick, so the interval is a floor, not a fixed clock time. The iPhone still has to be awake, on WiFi and reachable for a run to succeed.

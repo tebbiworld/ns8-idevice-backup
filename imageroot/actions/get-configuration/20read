@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 import devreg
+import ldapsettings
 import modsecrets  # noqa: E402
 
 env = os.environ
@@ -96,15 +97,10 @@ config = {
     "selfservice_url": (f"https://{env.get('SELFSERVICE_HOST')}{env.get('SELFSERVICE_PATH',)}/" if env.get("SELFSERVICE_HOST") else ""),
     "web_running": web_running,
     "ldap_enabled": env.get("LDAP_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"),
-    "ldap_url": env.get("LDAP_URL", ""),
-    "ldap_base_dn": env.get("LDAP_BASE_DN", ""),
-    "ldap_bind_dn": env.get("LDAP_BIND_DN", ""),
-    "ldap_user_attribute": env.get("LDAP_USER_ATTRIBUTE", "sAMAccountName"),
-    "ldap_group": env.get("LDAP_GROUP", ""),
-    "ldap_bind_password_set": bool(modsecrets.get("LDAP_BIND_PASSWORD")),
     "selfservice_restore": env.get("SELFSERVICE_RESTORE", "true").strip().lower() in ("1","true","yes","on"),
-    "ldap_domain": env.get("LDAP_DOMAIN", ""),
     "container_running": running,
     "devices": devices,
 }
+# ldap_* settings and user_domains, never the bind password
+config.update(ldapsettings.configuration())
 json.dump(config, fp=sys.stdout)

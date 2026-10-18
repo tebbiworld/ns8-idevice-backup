@@ -2,10 +2,12 @@
 # Copyright (C) 2026 tebbi
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Self-service web app (same image as the engine): LDAP-authenticated portal
-# where users manage their own device backups. Published on 127.0.0.1:${WEB_PORT}
-# and reverse-proxied by Traefik under ${SELFSERVICE_HOST}. Only started once a
-# self-service host name is configured.
+# Self-service web app (same image as the engine): portal where users log in
+# with their directory account and manage their own device backups. Host
+# network, listening on 127.0.0.1:${WEB_PORT} only, reverse-proxied by Traefik
+# under ${SELFSERVICE_HOST}; the node loopback is also where the ldapproxy of a
+# user domain listens (state/ldap.env, written by bin/discover-ldap before
+# every start). Only started once a self-service host name is configured.
 
 [Unit]
 Description=iOS Device Backup self-service web
@@ -22,17 +24,20 @@ TimeoutStopSec=20
 ExecStartPre=/bin/rm -f %t/idevice-web.pid %t/idevice-web.ctr-id
 # device passwords belong in state/device-secrets.json (0600), also after a restore of an old backup
 ExecStartPre=-runagent migrate-device-secrets
+ExecStartPre=/usr/local/bin/runagent discover-ldap
 ExecStart=/usr/bin/podman run \
     --conmon-pidfile %t/idevice-web.pid \
     --cidfile %t/idevice-web.ctr-id \
     --cgroups=no-conmon \
     --replace -d --name idevice-web \
     --stop-timeout 15 \
-    --publish 127.0.0.1:${WEB_PORT}:8080 \
+    --network=host \
     --volume idevice-lockdown:/var/lib/lockdown \
     --volume idevice-data:/data \
     --volume %S/state:/state:z \
     --env STATE_DIR=/state \
+    --env WEB_HOST=127.0.0.1 \
+    --env WEB_INTERNAL_PORT=${WEB_PORT} \
     --env-file %S/state/ldap.env \
     --env-file %S/state/web.env \
     --entrypoint /opt/pmd3/bin/python3 \

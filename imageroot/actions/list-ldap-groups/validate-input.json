@@ -1,0 +1,13 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "list-ldap-groups input",
+    "$id": "http://nethserver.org/json-schema/task/input/idevice-backup/list-ldap-groups",
+    "description": "Groups of a cluster user domain",
+    "examples": [{"domain": "ad.example.org"}],
+    "type": "object",
+    "required": ["domain"],
+    "additionalProperties": false,
+    "properties": {
+        "domain": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[A-Za-z0-9.-]+$"}
+    }
+}
