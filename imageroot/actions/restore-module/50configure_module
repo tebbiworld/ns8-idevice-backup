@@ -40,7 +40,8 @@ data = {
 data.update(ldapsettings.restore_data(default_source="custom"))
 data.update({"notify_mail_to": env.get("NOTIFY_MAIL_TO", ""),
              "notify_owners": flag("NOTIFY_OWNERS", "false"),
-             "notify_overdue_days": int(env.get("NOTIFY_OVERDUE_DAYS", "14") or 14)})
+             "notify_overdue_days": int(env.get("NOTIFY_OVERDUE_DAYS", "14") or 14),
+             "autobackup_require_power": flag("AUTOBACKUP_REQUIRE_POWER", "false")})
 if not env.get("LDAP_SOURCE") and env.get("LDAP_URL"):
     data["ldap_tls_verify"] = False
 if "TRAEFIK_LETS_ENCRYPT" not in env:

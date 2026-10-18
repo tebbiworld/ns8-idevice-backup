@@ -114,7 +114,9 @@
     "notify_mail_to_helper": "Erhält über den Smarthost des Clusters eine Mail, wenn ein Gerät seit den unten genannten Tagen keine erfolgreiche Sicherung hat (höchstens einmal pro Woche und Gerät).",
     "notify_owners": "Auch die Gerätebesitzer benachrichtigen",
     "notify_owners_helper": "Nutzt die Adresse des Besitzers aus dem Verzeichnis, gespeichert bei seiner Anmeldung am Portal.",
-    "notify_overdue_days": "Überfällig nach (Tagen)"
+    "notify_overdue_days": "Überfällig nach (Tagen)",
+    "autobackup_require_power": "Nur am Ladegerät",
+    "autobackup_require_power_helper": "Vor jeder automatischen Sicherung wird das Gerät über WLAN gefragt, ob es am Strom hängt; wenn nicht, wartet die Sicherung auf einen späteren stündlichen Lauf (kein Fehler). Von Hand gestartete Sicherungen betrifft das nicht."
   },
   "about": {
     "title": "Über"

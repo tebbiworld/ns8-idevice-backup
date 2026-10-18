@@ -36,6 +36,22 @@ def load_devices():
         return {}
 
 
+require_power = env.get("AUTOBACKUP_REQUIRE_POWER", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
+def on_power(udid, ip):
+    """True when the device reports an external power source, False when it
+    does not, None when it cannot be asked (asleep, away)."""
+    try:
+        proc = subprocess.run(["podman", "exec", "idevice-backup", "idevice-tool", "ping", "--udid", udid, "--ip", ip],
+                              capture_output=True, text=True, timeout=120)
+        info = json.loads((proc.stdout or "").strip().splitlines()[-1])
+    except (subprocess.SubprocessError, ValueError, IndexError):
+        return None
+    value = info.get("external_power")
+    return None if value is None else bool(value)
+
+
 action = os.path.expanduser("~/.config/actions/run-backup/10backup")
 if not os.path.exists(action):
     action = "/imageroot/actions/run-backup/10backup"
@@ -53,6 +69,13 @@ for udid, dev in devices.items():
         continue
     due += 1
     name = dev.get("name", udid)
+    if require_power:
+        power = on_power(udid, dev["ip"].strip())
+        if power is not True:
+            # not an error: wait for a run while the phone is on its charger
+            why = "not on power" if power is False else "cannot read the power state"
+            print(f"autobackup: {name} due but {why}, waiting for the next run", file=sys.stderr)
+            continue
     age_h = int((now - last) / 3600) if last else "never"
     print(f"autobackup: {name} due (last success {age_h}h ago), backing up", file=sys.stderr)
     proc = subprocess.run([sys.executable, action], input=json.dumps({"udid": udid}),

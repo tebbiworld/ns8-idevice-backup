@@ -114,7 +114,9 @@
     "notify_mail_to_helper": "Gets a mail through the cluster smarthost when a device has had no successful backup for the days below (at most once a week per device).",
     "notify_owners": "Also mail the device owners",
     "notify_owners_helper": "Uses the owner's address from the directory, stored when the owner logs in to the portal.",
-    "notify_overdue_days": "Overdue after (days)"
+    "notify_overdue_days": "Overdue after (days)",
+    "autobackup_require_power": "Only while on the charger",
+    "autobackup_require_power_helper": "Before each automatic backup the device is asked over WiFi whether it is connected to power; if not, the backup waits for a later hourly run (no error). Backups started by hand are not affected."
   },
   "about": {
     "title": "About"

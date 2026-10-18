@@ -281,6 +281,10 @@ async def cmd_ping(args):
         ("product_type", {"key": "ProductType"}),
         ("wifi_connections", {"domain": "com.apple.mobile.wireless_lockdown", "key": "EnableWifiConnections"}),
         ("backup_encrypted", {"domain": "com.apple.mobile.backup", "key": "WillEncrypt"}),
+        # readable over WiFi (checked on iOS 26.6): power for "back up only on power"
+        ("external_power", {"domain": "com.apple.mobile.battery", "key": "ExternalConnected"}),
+        ("charging", {"domain": "com.apple.mobile.battery", "key": "BatteryIsCharging"}),
+        ("battery_level", {"domain": "com.apple.mobile.battery", "key": "BatteryCurrentCapacity"}),
     ):
         try:
             v = await _value(ld, **kw)

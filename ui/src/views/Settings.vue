@@ -104,6 +104,19 @@
               {{ $t("settings.autobackup_helper") }}
             </div>
             <template v-if="autobackup_enabled">
+              <cv-toggle
+                value="autobackupRequirePower"
+                :label="$t('settings.autobackup_require_power')"
+                v-model="autobackup_require_power"
+                :disabled="busy"
+                class="field"
+              >
+                <template slot="text-left">{{ $t("settings.off") }}</template>
+                <template slot="text-right">{{ $t("settings.on") }}</template>
+              </cv-toggle>
+              <div class="bx--form__helper-text">
+                {{ $t("settings.autobackup_require_power_helper") }}
+              </div>
               <cv-text-input
                 :label="$t('settings.notify_mail_to')"
                 v-model.trim="notify_mail_to"
@@ -597,6 +610,7 @@ export default {
       include_backups: false,
       autobackup_enabled: false,
       autobackup_interval_hours: 24,
+      autobackup_require_power: false,
       notify_mail_to: "",
       notify_owners: false,
       notify_overdue_days: 14,
@@ -819,6 +833,7 @@ export default {
       this.include_backups = !!c.include_backups;
       this.autobackup_enabled = !!c.autobackup_enabled;
       this.autobackup_interval_hours = c.autobackup_interval_hours || 24;
+      this.autobackup_require_power = !!c.autobackup_require_power;
       this.notify_mail_to = c.notify_mail_to || "";
       this.notify_owners = !!c.notify_owners;
       this.notify_overdue_days = c.notify_overdue_days || 14;
@@ -924,6 +939,7 @@ export default {
             include_backups: this.include_backups,
             autobackup_enabled: this.autobackup_enabled,
             autobackup_interval_hours: Number(this.autobackup_interval_hours),
+            autobackup_require_power: this.autobackup_require_power,
             notify_mail_to: this.notify_mail_to,
             notify_owners: this.notify_owners,
             notify_overdue_days: Number(this.notify_overdue_days),

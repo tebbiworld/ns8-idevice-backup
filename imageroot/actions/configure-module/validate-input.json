@@ -157,6 +157,12 @@
             "maximum": 365,
             "title": "Overdue after (days)",
             "default": 14
+        },
+        "autobackup_require_power": {
+            "type": "boolean",
+            "title": "Only on power",
+            "description": "Automatic backups only while the device is connected to a charger (checked over WiFi before each run).",
+            "default": false
         }
     }
 }

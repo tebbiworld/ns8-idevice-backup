@@ -91,6 +91,10 @@ The overdue mail settings read back
     Should Be Equal    ${cfg['notify_mail_to']}    backup-admin@ci.test
     Should Be True    ${cfg['notify_owners']}
     Should Be Equal As Integers    ${cfg['notify_overdue_days']}    3
+    Should Not Be True    ${cfg['autobackup_require_power']}
+    Run task    module/${module_id}/configure-module    {"retention":4,"include_backups":false,"autobackup_enabled":true,"autobackup_interval_hours":12,"autobackup_require_power":true}    decode_json=${FALSE}
+    ${cfg} =    Run task    module/${module_id}/get-configuration    {}
+    Should Be True    ${cfg['autobackup_require_power']}
     # saving the global options keeps the portal login
     Should Be True    ${cfg['web_running']}
 

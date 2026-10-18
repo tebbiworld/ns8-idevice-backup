@@ -25,6 +25,8 @@ agent.set_env("IDEVICE_INCLUDE_BACKUPS", "true" if include else "false")
 
 # Automatic backups (scheduler). Enable + interval in hours; the hourly timer
 # checks which devices are due.
+if "autobackup_require_power" in data:
+    agent.set_env("AUTOBACKUP_REQUIRE_POWER", "true" if data.get("autobackup_require_power") else "false")
 if "autobackup_enabled" in data:
     agent.set_env("AUTOBACKUP_ENABLED", "true" if data.get("autobackup_enabled") else "false")
 if data.get("autobackup_interval_hours") is not None:

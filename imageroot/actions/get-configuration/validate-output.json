@@ -162,6 +162,9 @@
         },
         "notify_overdue_days": {
             "type": "integer"
+        },
+        "autobackup_require_power": {
+            "type": "boolean"
         }
     }
 }
