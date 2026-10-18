@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Mail when a backup is overdue.** With automatic backups on, a device without a successful backup for a number of days (default 14) triggers a mail through the cluster smarthost to an admin address and, optionally, to the owner (address read from the directory at portal login); at most once a week per device. Found with a phone that silently had no backup for three weeks.
+
+### Changed
+
+- The module declares the minimum NS8 core it was tested with (`org.nethserver.min-core` 3.22.0).
+
 ## 1.5.0 — 2026-10-18
 
 ### Added
