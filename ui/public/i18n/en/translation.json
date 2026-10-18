@@ -108,7 +108,13 @@
     "run_waiting": "Connection lost, next attempt shortly ({n} of {m})",
     "run_attempt": "attempt {n} of {m}",
     "unfinished_kept": "+ 1 unfinished, will be continued",
-    "snapshot_unfinished": "unfinished, cannot be restored"
+    "snapshot_unfinished": "unfinished, cannot be restored",
+    "notify_mail_to": "Mail when a backup is overdue (optional)",
+    "notify_mail_to_placeholder": "admin@example.org",
+    "notify_mail_to_helper": "Gets a mail through the cluster smarthost when a device has had no successful backup for the days below (at most once a week per device).",
+    "notify_owners": "Also mail the device owners",
+    "notify_owners_helper": "Uses the owner's address from the directory, stored when the owner logs in to the portal.",
+    "notify_overdue_days": "Overdue after (days)"
   },
   "about": {
     "title": "About"
