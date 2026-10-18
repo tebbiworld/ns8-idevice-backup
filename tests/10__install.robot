@@ -85,6 +85,19 @@ Failed logins are throttled
     ${n} =    Run on node    runagent -m ${module_id} bash -c 'grep -c "result=throttled" "$AGENT_STATE_DIR/audit.log" || true'
     Should Be True    ${n.strip()} >= 1
 
+The overdue mail settings read back
+    Run task    module/${module_id}/configure-module    {"retention":4,"include_backups":false,"autobackup_enabled":true,"autobackup_interval_hours":12,"notify_mail_to":"backup-admin@ci.test","notify_owners":true,"notify_overdue_days":3}    decode_json=${FALSE}
+    ${cfg} =    Run task    module/${module_id}/get-configuration    {}
+    Should Be Equal    ${cfg['notify_mail_to']}    backup-admin@ci.test
+    Should Be True    ${cfg['notify_owners']}
+    Should Be Equal As Integers    ${cfg['notify_overdue_days']}    3
+    # saving the global options keeps the portal login
+    Should Be True    ${cfg['web_running']}
+
+An overdue device without a smarthost is reported, not fatal
+    ${out} =    Run on node    runagent -m ${module_id} python3 -c 'import backupnotify, time; print(backupnotify.check({"x": {"name": "ci", "ip": "192.0.2.1", "owner": "ci", "last_backup": time.time() - 30 * 86400}}))' 2>&1
+    Should Contain    ${out}    not sent
+
 *** Keywords ***
 Portal login page is served
     ${out} =    Run on node    curl -fsSkL -H 'Host: idevice.ci.test' https://127.0.0.1/
