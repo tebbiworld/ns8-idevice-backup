@@ -6,10 +6,10 @@
 device by its IP address over the classic lockdown TCP port (62078) with a
 **pairing file you create on your own computer** and upload here.
 
-> Status: this module is deployed for testing the device connection. The
-> end-to-end WiFi-backup path has not been verified against a physical device
-> yet — that is exactly what the dev deployment is for. Treat it as unproven
-> until a real iPhone backup has succeeded.
+> Status: in production use since September 2026 — full and incremental WiFi
+> backups of several iPhones, restore, automatic backups and the self-service
+> portal work against real devices. Weak WiFi links are the usual cause of an
+> aborted backup (see *Long backups, lost connections, progress*).
 
 - No USB on the server: the pairing is done once on your computer (USB) and the
   pairing file is uploaded
@@ -18,12 +18,15 @@ device by its IP address over the classic lockdown TCP port (62078) with a
 - Device-side encrypted backups, kept per device with a configurable retention
 - Runs rootless; the engine only makes outbound TCP connections to the device
 
-## How the connection works (verified from source, not yet device-tested)
+## How the connection works
 
 - pymobiledevice3 opens a TCP lockdown session to `<device_ip>:62078` using the
   uploaded pairing record, then runs the classic `com.apple.mobilebackup2`
   service — the same one Finder WiFi backup uses. No usbmux, netmuxd or Bonjour
   is involved.
+- Over WiFi the device drops every service connection right after TLS unless a
+  `com.apple.mobile.heartbeat` session (Marco/Polo every 10 s) runs in
+  parallel; the engine keeps one open for the whole backup.
 - The server must be able to reach the iPhone on **TCP 62078**. With the iPhone
   on a separate WiFi subnet, the router must route/allow that from the server
   subnet (172.17.0.0/24) to the WiFi subnet.
@@ -106,9 +109,20 @@ every device by hand.
 - Configure a **self-service host** (FQDN) and optionally a **path** (e.g.
   `/idevice`, served like `https://host/idevice/`, similar to cluster-admin),
   with Let's Encrypt.
-- Users log in with **AD/LDAP** (a direct bind with the admin-entered service
-  account; use `ldaps://…:636`). Give the LDAP URL, base DN, bind DN + password,
-  the login attribute (default `sAMAccountName`) and, optionally, a group DN.
+- Users log in with their **directory account**, from one of two sources:
+  - **User domain of this cluster** (recommended): pick the domain and,
+    optionally, a group from a list. Nothing but the domain name is stored;
+    the portal reaches the directory through the node's ldapproxy and follows
+    password changes of the bind account and DC moves by itself.
+  - **LDAP server of its own** (advanced): URL (`ldaps://…:636`, or `ldap://`
+    with StartTLS), certificate check (on by default; installations from
+    before 1.5.0 keep it off, as it was), Active Directory or OpenLDAP, base DN,
+    bind DN + password (kept in `state/passwords.env`), login attribute and an
+    optional group name or DN. NS8 can also add an external AD/LDAP as a user
+    domain, which is then offered in the first choice.
+
+  Nested AD groups count. Five failed logins for an account or from an address
+  block further attempts for 15 minutes.
 - Each device has an **owner**; a user only sees and acts on their own devices.
   The admin sees all devices and assigns owners in cluster-admin. A device paired
   through the portal is owned by the logged-in user.
@@ -119,8 +133,12 @@ every device by hand.
 - **Audit log:** every login and device action is recorded per user in the
   container log and in `state/audit.log` (which the NS8 backup keeps).
 
-The portal needs one TCP port and the `traefik@node:routeadm` authorization,
-granted when the module is installed.
+The portal runs in the host network on `127.0.0.1:<allocated port>` behind
+Traefik. It needs one TCP port and the `traefik@node:routeadm` and
+`cluster:accountconsumer` authorizations, granted when the module is installed.
+The directory login code is shared with ns8-clamav and kept identical there:
+`device/ldapauth.py`, `imageroot/pypkg/ldapsettings.py`,
+`ui/src/components/LdapLogin.vue`.
 
 ## Restore to a device
 
@@ -144,7 +162,6 @@ The same operation is available inside the engine container:
 
 ## Limitations and things to watch
 
-- **Not yet verified end-to-end** against a real device (see status note).
 - **WiFi lockdown must be enabled** on the device (see pairing step 2) — the
   most common reason a first backup fails to connect.
 - **Routing/firewall:** the server must reach `<device_ip>:62078` across the
@@ -153,9 +170,8 @@ The same operation is available inside the engine container:
   DHCP reservation for each iPhone is recommended.
 - **Pairing expiry:** if the pairing stops working (e.g. after a long time or
   an iOS major update), re-pair on your computer and upload a new file.
-- **Login / multi-user:** every cluster admin who can open this app sees all
-  devices. Per-user device ownership via the NS8 user domain (LDAP) is not
-  implemented yet.
+- **Admins and owners:** every cluster admin who can open this app sees all
+  devices; in the self-service portal a user only sees the devices they own.
 
 ## Development
 
