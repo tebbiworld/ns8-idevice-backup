@@ -30,6 +30,13 @@ Register a device with the released version
     Skip If    '${SCENARIO}' != 'update'    scenario is ${SCENARIO}
     Register the test device    ${module_id}
 
+Remember the certificate check before the update
+    Skip If    '${SCENARIO}' != 'update'    scenario is ${SCENARIO}
+    ${cfg} =    Run task    module/${module_id}/get-configuration    {}
+    # releases before 1.5.0 had no such setting and never checked the certificate
+    ${before} =    Evaluate    $cfg.get('ldap_tls_verify', False)
+    Set Global Variable    ${TLS_VERIFY_BEFORE}    ${before}
+
 Update to the image under test
     Skip If    '${SCENARIO}' != 'update'    scenario is ${SCENARIO}
     Run on node    api-cli run update-module --data '{"force":true,"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
@@ -56,9 +63,9 @@ An earlier configuration is kept as an LDAP server of its own
     Should Be Equal    ${cfg['ldap_url']}    ldaps://ldap.ci.test:636
     Should Be Equal    ${cfg['ldap_user_attribute']}    uid
     Should Be True    'ldap_bind_password' not in $cfg
-    # the released version did not check the certificate: the update keeps that
+    # the update keeps the certificate check of the released version
     IF    '${SCENARIO}' == 'update'
-        Should Not Be True    ${cfg['ldap_tls_verify']}
+        Should Be Equal    ${cfg['ldap_tls_verify']}    ${TLS_VERIFY_BEFORE}
     END
 
 The portal listens on the node loopback only
