@@ -50,7 +50,45 @@ Secrets are stored in passwords.env only
     ${mode} =    Run on node    runagent -m ${module_id} bash -c 'stat -c \%a "$AGENT_STATE_DIR/ldap.env" "$AGENT_STATE_DIR/web.env" | sort -u'
     Should Be Equal As Strings    ${mode.strip()}    600
 
+An earlier configuration is kept as an LDAP server of its own
+    ${cfg} =    Run task    module/${module_id}/get-configuration    {}
+    Should Be Equal    ${cfg['ldap_source']}    custom
+    Should Be Equal    ${cfg['ldap_url']}    ldaps://ldap.ci.test:636
+    Should Be Equal    ${cfg['ldap_user_attribute']}    uid
+    Should Be True    'ldap_bind_password' not in $cfg
+    # the released version did not check the certificate: the update keeps that
+    IF    '${SCENARIO}' == 'update'
+        Should Not Be True    ${cfg['ldap_tls_verify']}
+    END
+
+The portal listens on the node loopback only
+    ${port} =    Run on node    runagent -m ${module_id} bash -c 'echo $WEB_PORT'
+    ${bound} =    Run on node    ss -tlnH 'sport = :${port.strip()}' | awk '{print $4}' | sort -u
+    Should Be Equal As Strings    ${bound.strip()}    127.0.0.1:${port.strip()}
+    ${old} =    Run on node    ss -tlnH 'sport = :8080' | wc -l
+    Should Be Equal As Integers    ${old.strip()}    0
+
+The favicon is served without login
+    ${out} =    Run on node    curl -sSk -o /dev/null -w '\%{http_code} \%{content_type}' -H 'Host: idevice.ci.test' https://127.0.0.1/favicon.ico
+    Should Start With    ${out.strip()}    200 image/png
+
+Groups of an unknown user domain are an empty list
+    ${out} =    Run task    module/${module_id}/list-ldap-groups    {"domain":"no-such-domain.ci.test"}
+    Should Be Equal As Integers    ${{ len($out['groups']) }}    0
+
+Failed logins are throttled
+    # five wrong passwords for one account, then even the form is refused
+    # before the directory is asked (the audit log records "throttled")
+    FOR    ${i}    IN RANGE    6
+        Portal login with a wrong password
+    END
+    ${n} =    Run on node    runagent -m ${module_id} bash -c 'grep -c "result=throttled" "$AGENT_STATE_DIR/audit.log" || true'
+    Should Be True    ${n.strip()} >= 1
+
 *** Keywords ***
 Portal login page is served
     ${out} =    Run on node    curl -fsSkL -H 'Host: idevice.ci.test' https://127.0.0.1/
     Should Contain    ${out}    iOS Device Backup
+
+Portal login with a wrong password
+    Run on node    j=$(mktemp); csrf=$(curl -sSk -c $j -b $j -H 'Host: idevice.ci.test' https://127.0.0.1/login | grep -o 'name="csrf" value="[^"]*"' | cut -d'"' -f4); curl -sSk -o /dev/null -c $j -b $j -H 'Host: idevice.ci.test' --data-urlencode "csrf=$csrf" --data-urlencode username=ci-throttle --data-urlencode password=wrong https://127.0.0.1/login; rm -f $j
