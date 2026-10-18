@@ -14,6 +14,7 @@ import sys
 
 import agent
 import agent.tasks
+import ldapsettings
 
 env = os.environ
 
@@ -33,14 +34,12 @@ data = {
     "http2https": flag("TRAEFIK_HTTP2HTTPS", "True"),
     "lets_encrypt": flag("TRAEFIK_LETS_ENCRYPT", "False"),
     "ldap_enabled": flag("LDAP_ENABLED", "false"),
-    "ldap_url": env.get("LDAP_URL", ""),
-    "ldap_base_dn": env.get("LDAP_BASE_DN", ""),
-    "ldap_bind_dn": env.get("LDAP_BIND_DN", ""),
-    "ldap_bind_password": "",
-    "ldap_user_attribute": env.get("LDAP_USER_ATTRIBUTE", "sAMAccountName"),
-    "ldap_group": env.get("LDAP_GROUP", ""),
-    "ldap_domain": env.get("LDAP_DOMAIN", ""),
 }
+# directory login (pypkg/ldapsettings.py); a backup of a version before the
+# shared login only had a server of its own, used without certificate check
+data.update(ldapsettings.restore_data(default_source="custom"))
+if not env.get("LDAP_SOURCE") and env.get("LDAP_URL"):
+    data["ldap_tls_verify"] = False
 if "TRAEFIK_LETS_ENCRYPT" not in env:
     # A backup taken with a module version that did not record the setting: say
     # so instead of silently asserting "off". The route is created without a

@@ -5,18 +5,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# Configure the self-service web app: LDAP settings (entered by the admin, the
-# ARSnova pattern — direct bind, no user-domain join needed), a Traefik route
-# under the self-service host name, and the web unit. Writes ldap.env / web.env
-# that the web container reads.
+# Configure the self-service web app: directory login (user domain of the
+# cluster or an LDAP server of its own, see pypkg/ldapsettings.py), a Traefik
+# route under the self-service host name, and the web unit. Writes web.env;
+# bin/discover-ldap writes ldap.env when the web unit starts.
 
 import json
 import os
 import secrets
 import subprocess
 import sys
-import urllib.parse
 
+import ldapsettings
 import modsecrets
 
 import agent
@@ -51,23 +51,6 @@ h2hs = _bool("http2https", "TRAEFIK_HTTP2HTTPS", True)
 lets_encrypt = bool(data.get("lets_encrypt", False))
 
 ldap_enabled = _bool("ldap_enabled", "LDAP_ENABLED", False)
-ldap_url = _str("ldap_url", "LDAP_URL").rstrip("/")
-ldap_base_dn = _str("ldap_base_dn", "LDAP_BASE_DN")
-ldap_bind_dn = _str("ldap_bind_dn", "LDAP_BIND_DN")
-ldap_bind_password = data.get("ldap_bind_password")
-ldap_user_attribute = _str("ldap_user_attribute", "LDAP_USER_ATTRIBUTE") or "sAMAccountName"
-ldap_group = _str("ldap_group", "LDAP_GROUP")
-
-# keep the stored password when the field is left empty on a reconfigure
-if ldap_bind_password is None or ldap_bind_password == "":
-    ldap_bind_password = modsecrets.get("LDAP_BIND_PASSWORD")
-
-ldap_host, ldap_port, scheme = "", "636", "ldaps"
-if ldap_url:
-    parts = urllib.parse.urlsplit(ldap_url)
-    scheme = parts.scheme or "ldaps"
-    ldap_host = parts.hostname or ""
-    ldap_port = str(parts.port or (389 if scheme == "ldap" else 636))
 
 agent.mset_env({
     "SELFSERVICE_HOST": host,
@@ -76,30 +59,16 @@ agent.mset_env({
     # kept so restore-module can re-create the route with the same setting
     **({"TRAEFIK_LETS_ENCRYPT": "True" if lets_encrypt else "False"} if "lets_encrypt" in data else {}),
     "LDAP_ENABLED": "true" if ldap_enabled else "false",
-    "LDAP_URL": ldap_url,
-    "LDAP_HOST": ldap_host,
-    "LDAP_PORT": ldap_port,
-    "LDAP_BASE_DN": ldap_base_dn,
-    "LDAP_BIND_DN": ldap_bind_dn,
-    "LDAP_USER_ATTRIBUTE": ldap_user_attribute,
-    "LDAP_GROUP": ldap_group,
 })
-# The bind password is a secret: state/passwords.env, not the module environment.
-modsecrets.write({"LDAP_BIND_PASSWORD": ldap_bind_password})
 
-# The container may have to reach the directory via host.containers.internal
-# under pasta (only relevant if the DC is on this node); external AD is left as
-# is. Reuse the shared helper.
-container_host = ldap_host
-container_url = ldap_url
-if ldap_host:
-    try:
-        container_host = subprocess.run(["ldap-container-host", ldap_host],
-                                        capture_output=True, text=True, check=True).stdout.strip() or ldap_host
-    except Exception:
-        container_host = ldap_host
-    if container_host != ldap_host and ldap_url:
-        container_url = f"{scheme}://{container_host}:{ldap_port}"
+# Directory login (pypkg/ldapsettings.py, shared with the other tebbiworld
+# modules): a user domain of this cluster through the node's ldapproxy, or an
+# LDAP server of its own (bind password in state/passwords.env). A request
+# without any ldap_* key (the Save of the global options) keeps the settings.
+if any(k.startswith("ldap_") and k != "ldap_enabled" for k in data):
+    ldapsettings.apply(data, active=bool(host) and ldap_enabled, legacy_source="custom")
+else:
+    ldapsettings.bind_domain(active=bool(host) and ldap_enabled)
 
 
 def write_envfile(path, kv):
@@ -113,29 +82,18 @@ def write_envfile(path, kv):
     os.replace(tmp, path)
 
 
-write_envfile("ldap.env", {
-    "LDAP_URL": ldap_url,
-    "LDAP_URL_CONTAINER": container_url,
-    "LDAP_HOST": ldap_host,
-    "LDAP_HOST_CONTAINER": container_host,
-    "LDAP_PORT": ldap_port,
-    "LDAP_BASE_DN": ldap_base_dn,
-    "LDAP_BIND_DN": ldap_bind_dn,
-    "LDAP_BIND_PASSWORD": ldap_bind_password,
-    "LDAP_USER_ATTRIBUTE": ldap_user_attribute,
-    "LDAP_GROUP": ldap_group,
-})
+# state/ldap.env (with the bind password) is written by bin/discover-ldap when
+# the web unit starts, so a user domain's current bind account is used
 selfservice_restore = _bool("selfservice_restore", "SELFSERVICE_RESTORE", True)
 agent.set_env("SELFSERVICE_RESTORE", "true" if selfservice_restore else "false")
-ldap_domain = _str("ldap_domain", "LDAP_DOMAIN")
-agent.set_env("LDAP_DOMAIN", ldap_domain)
+# owner domain recorded with every device added in the portal
+ldap_domain = os.environ.get("LDAP_DOMAIN", "")
 # never hand the portal an empty session secret (an instance whose secret was
 # not migrated or generated yet): create one instead
 modsecrets.ensure({"SESSION_SECRET": secrets.token_hex(32)})
 write_envfile("web.env", {
     "SESSION_SECRET": modsecrets.get("SESSION_SECRET"),
     "APP_TITLE": "iOS Device Backup",
-    "WEB_INTERNAL_PORT": "8080",
     "STATE_DIR": "/state",
     "LDAP_DOMAIN": ldap_domain,
     "SELFSERVICE_RESTORE": "true" if selfservice_restore else "false",
@@ -169,7 +127,7 @@ elif os.path.exists(route_marker):
     os.remove(route_marker)
 
 # Start or stop the web unit: only run it when a host and LDAP are configured.
-want_web = bool(host and ldap_enabled and ldap_url and ldap_base_dn and ldap_bind_dn)
+want_web = bool(host and ldap_enabled and ldapsettings.complete())
 if want_web:
     subprocess.run(["systemctl", "--user", "enable", "idevice-web.service"], check=True)
     subprocess.run(["systemctl", "--user", "restart", "idevice-web.service"], check=True)
