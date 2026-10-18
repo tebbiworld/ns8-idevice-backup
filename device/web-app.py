@@ -22,16 +22,16 @@ import os
 import plistlib
 import re
 import secrets
-import ssl
 import sys
 import subprocess
 import threading
 import time
 
-import ldap3
-from ldap3.utils.conv import escape_filter_chars
 from flask import Flask, request, redirect, session, abort, url_for, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ldapauth  # noqa: E402  (shared with the other tebbiworld modules)
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -43,6 +43,8 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=True,
     PERMANENT_SESSION_LIFETIME=8 * 3600,
+    # the only upload is a pairing record (a few kB): refuse anything large
+    MAX_CONTENT_LENGTH=1024 * 1024,
 )
 
 STATE_DIR = os.environ.get("STATE_DIR", "/state")
@@ -53,16 +55,7 @@ LOCKDOWN_DIR = "/var/lib/lockdown"
 BACKUP_ROOT = os.environ.get("BACKUP_ROOT", "/data/backups")
 UDID_RE = re.compile(r"^[A-Za-z0-9-]{16,45}$")
 
-LDAP_URL = os.environ.get("LDAP_URL_CONTAINER", os.environ.get("LDAP_URL", "")).strip()
-LDAP_HOST = os.environ.get("LDAP_HOST_CONTAINER", os.environ.get("LDAP_HOST", "")).strip()
-LDAP_PORT = int(os.environ.get("LDAP_PORT", "636") or "636")
-LDAP_SSL = not LDAP_URL.startswith("ldap://")
-LDAP_BASE_DN = os.environ.get("LDAP_BASE_DN", "").strip()
-LDAP_BIND_DN = os.environ.get("LDAP_BIND_DN", "").strip()
-LDAP_BIND_PASSWORD = os.environ.get("LDAP_BIND_PASSWORD", "")
-LDAP_USER_ATTRIBUTE = os.environ.get("LDAP_USER_ATTRIBUTE", "sAMAccountName").strip() or "sAMAccountName"
-LDAP_GROUP = os.environ.get("LDAP_GROUP", "").strip()
-LDAP_CA_FILE = os.environ.get("LDAP_CA_FILE", "").strip()
+LDAP = ldapauth.Settings()
 LDAP_DOMAIN = os.environ.get("LDAP_DOMAIN", "").strip()
 APP_TITLE = os.environ.get("APP_TITLE", "iOS Device Backup")
 ALLOW_RESTORE = os.environ.get("SELFSERVICE_RESTORE", "true").strip().lower() in ("1", "true", "yes", "on")
@@ -183,8 +176,11 @@ AUDIT_FILE = os.path.join(STATE_DIR, "audit.log")
 def audit(action, uid="", **fields):
     """Append an audit line to the container log and a persistent file."""
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    kv = " ".join(f"{k}={v}" for k, v in fields.items() if v not in ("", None))
-    line = f"{ts} user={uid or '-'} action={action} {kv}".rstrip()
+    # values may come from the login form: no line breaks or spaces that
+    # could forge another entry or field
+    clean = lambda v: re.sub(r"[\x00-\x20\x7f]", "_", str(v))[:200]
+    kv = " ".join(f"{k}={clean(v)}" for k, v in fields.items() if v not in ("", None))
+    line = f"{ts} user={clean(uid) if uid else '-'} action={action} {kv}".rstrip()
     print("AUDIT " + line, file=sys.stderr, flush=True)
     try:
         with _audit_lock, open(AUDIT_FILE, "a") as fp:
@@ -195,48 +191,36 @@ def audit(action, uid="", **fields):
 
 # --------------------------------------------------------------------------- LDAP
 
-def _tls():
-    if LDAP_CA_FILE and os.path.exists(LDAP_CA_FILE):
-        return ldap3.Tls(validate=ssl.CERT_REQUIRED, ca_certs_file=LDAP_CA_FILE, version=ssl.PROTOCOL_TLS_CLIENT)
-    return ldap3.Tls(validate=ssl.CERT_NONE)
+# Failed logins per client address and per account: after FAIL_LIMIT failures
+# within FAIL_WINDOW seconds further attempts are refused for that window.
+FAIL_LIMIT = 5
+FAIL_WINDOW = 15 * 60
+_fails = {}
+_fails_lock = threading.Lock()
 
 
-def _server():
-    host = LDAP_HOST or (LDAP_URL.split("://", 1)[-1].split(":")[0] if LDAP_URL else "")
-    return ldap3.Server(host, port=LDAP_PORT, use_ssl=LDAP_SSL, tls=_tls() if LDAP_SSL else None)
+def _throttled(*keys):
+    now = time.time()
+    with _fails_lock:
+        for k in list(_fails):
+            _fails[k] = [t for t in _fails[k] if t > now - FAIL_WINDOW]
+            if not _fails[k]:
+                del _fails[k]
+        return any(len(_fails.get(k, [])) >= FAIL_LIMIT for k in keys)
+
+
+def _record_failure(*keys):
+    now = time.time()
+    with _fails_lock:
+        for k in keys:
+            _fails.setdefault(k, []).append(now)
 
 
 def ldap_authenticate(login, password):
-    if not (LDAP_URL and LDAP_BASE_DN and LDAP_BIND_DN) or not login or not password:
-        return None
-    srv = _server()
-    try:
-        mgr = ldap3.Connection(srv, user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD, auto_bind=True, receive_timeout=15)
-    except Exception:
-        return None
-    safe = escape_filter_chars(login)
-    flt = f"(&({LDAP_USER_ATTRIBUTE}={safe})(memberOf={LDAP_GROUP}))" if LDAP_GROUP else f"({LDAP_USER_ATTRIBUTE}={safe})"
-    try:
-        mgr.search(LDAP_BASE_DN, flt, attributes=[LDAP_USER_ATTRIBUTE, "displayName"])
-        if not mgr.entries:
-            return None
-        entry = mgr.entries[0]
-        user_dn = entry.entry_dn
-        uid = str(entry[LDAP_USER_ATTRIBUTE].value) if LDAP_USER_ATTRIBUTE in entry else login
-        try:
-            display = str(entry["displayName"].value)
-        except Exception:
-            display = uid
-    finally:
-        mgr.unbind()
-    try:
-        uc = ldap3.Connection(srv, user=user_dn, password=password, receive_timeout=15)
-        if not uc.bind():
-            return None
-        uc.unbind()
-    except Exception:
-        return None
-    return uid, display
+    """(uid, display name) of a valid directory login, else None (ldapauth.py:
+    a user domain of the cluster or an LDAP server of its own)."""
+    res = ldapauth.authenticate(LDAP, login, password)
+    return (res["uid"], res["display"]) if res else None
 
 
 # ----------------------------------------------------------------------- registry
@@ -463,6 +447,7 @@ def esc(s):
 
 PAGE = """<!doctype html><html lang="{lang}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
+<link rel="icon" type="image/png" href="{favicon}">
 <title>{title}</title><style>
 :root{{color-scheme:light dark}}
 body{{margin:0;font:15px/1.5 system-ui,sans-serif;background:#f4f4f4;color:#161616}}
@@ -533,7 +518,8 @@ def render(body, refresh=False):
     # Without JavaScript the page still reloads while a backup runs; with it the
     # script below updates the percentage in place and the reload is not needed.
     r = '<noscript><meta http-equiv="refresh" content="10"></noscript>' if refresh else ""
-    return PAGE.format(title=esc(APP_TITLE), body=body, refresh=r, lang=lang(), footer=esc(t("footer")))
+    return PAGE.format(title=esc(APP_TITLE), body=body, refresh=r, lang=lang(), footer=esc(t("footer")),
+                       favicon=esc(url_for("favicon")))
 
 
 def status_html(d, L):
@@ -727,6 +713,26 @@ def progress():
     return resp
 
 
+_FAVICON = None
+
+
+@app.get("/favicon.ico")
+@app.get("/favicon.png")
+def favicon():
+    global _FAVICON
+    if _FAVICON is None:
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "favicon.png"), "rb") as fp:
+                _FAVICON = fp.read()
+        except OSError:
+            _FAVICON = b""
+    if not _FAVICON:
+        abort(404)
+    resp = app.response_class(_FAVICON, mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 @app.get("/login")
 def login_form():
     if session.get("uid"):
@@ -737,10 +743,17 @@ def login_form():
 @app.post("/login")
 def login():
     check_csrf()
-    attempted = (request.form.get("username") or "").strip()
+    attempted = (request.form.get("username") or "").strip()[:256]
+    keys = ("ip:" + str(request.remote_addr), "user:" + attempted.lower())
+    if _throttled(*keys):
+        audit("login", uid=attempted, result="throttled", src=request.remote_addr)
+        time.sleep(1)
+        return redirect(url_for("login_form", e=1))
     res = ldap_authenticate(attempted, request.form.get("password") or "")
     if not res:
+        _record_failure(*keys)
         audit("login", uid=attempted, result="fail", src=request.remote_addr)
+        time.sleep(1)  # slow down password guessing
         return redirect(url_for("login_form", e=1))
     uid, display = res
     audit("login", uid=uid, result="ok", src=request.remote_addr)
@@ -919,4 +932,5 @@ def device_delete(udid):
 
 if __name__ == "__main__":
     from waitress import serve
-    serve(app, host="0.0.0.0", port=int(os.environ.get("WEB_INTERNAL_PORT", "8080")))
+    # host network: listen on the node loopback only, Traefik proxies the portal
+    serve(app, host=os.environ.get("WEB_HOST", "127.0.0.1"), port=int(os.environ.get("WEB_INTERNAL_PORT", "8080")))
