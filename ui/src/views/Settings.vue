@@ -194,64 +194,14 @@
               {{ $t("settings.ldap_enabled_helper") }}
             </div>
             <template v-if="ss.ldap_enabled">
-              <cv-text-input
-                :label="$t('settings.ldap_url')"
-                v-model.trim="ss.ldap_url"
-                :placeholder="$t('settings.ldap_url_placeholder')"
-                :helper-text="$t('settings.ldap_url_helper')"
+              <LdapLogin
+                v-model="ldap"
+                :userDomains="user_domains"
+                :bindPasswordSet="ldap_bind_password_set"
+                :errors="ldapErrors"
                 :disabled="ssBusy"
-                class="field"
-              ></cv-text-input>
-              <cv-text-input
-                :label="$t('settings.ldap_base_dn')"
-                v-model.trim="ss.ldap_base_dn"
-                :placeholder="$t('settings.ldap_base_dn_placeholder')"
-                :disabled="ssBusy"
-                class="field"
-              ></cv-text-input>
-              <cv-text-input
-                :label="$t('settings.ldap_bind_dn')"
-                v-model.trim="ss.ldap_bind_dn"
-                :placeholder="$t('settings.ldap_bind_dn_placeholder')"
-                :disabled="ssBusy"
-                class="field"
-              ></cv-text-input>
-              <cv-text-input
-                type="password"
-                :label="$t('settings.ldap_bind_password')"
-                v-model="ss.ldap_bind_password"
-                :helper-text="
-                  ss.ldap_bind_password_set
-                    ? $t('settings.ldap_bind_password_set')
-                    : $t('settings.ldap_bind_password_helper')
-                "
-                :password-hide-label="$t('settings.hide')"
-                :password-show-label="$t('settings.show')"
-                :disabled="ssBusy"
-                class="field"
-              ></cv-text-input>
-              <cv-text-input
-                :label="$t('settings.ldap_user_attribute')"
-                v-model.trim="ss.ldap_user_attribute"
-                :helper-text="$t('settings.ldap_user_attribute_helper')"
-                :disabled="ssBusy"
-                class="field"
-              ></cv-text-input>
-              <cv-text-input
-                :label="$t('settings.ldap_domain')"
-                v-model.trim="ss.ldap_domain"
-                :placeholder="$t('settings.ldap_domain_placeholder')"
-                :helper-text="$t('settings.ldap_domain_helper')"
-                :disabled="ssBusy"
-                class="field"
-              ></cv-text-input>
-              <cv-text-input
-                :label="$t('settings.ldap_group')"
-                v-model.trim="ss.ldap_group"
-                :placeholder="$t('settings.ldap_group_placeholder')"
-                :disabled="ssBusy"
-                class="field"
-              ></cv-text-input>
+                ref="ldap"
+              />
             </template>
             <NsInlineNotification
               v-if="error.selfService"
@@ -583,9 +533,15 @@ import Upload20 from "@carbon/icons-vue/es/upload/20";
 import Backup16 from "@carbon/icons-vue/es/data-backup/16";
 import Restore16 from "@carbon/icons-vue/es/mobile--download/16";
 import TrashCan16 from "@carbon/icons-vue/es/trash-can/16";
+import LdapLogin, {
+  LDAP_FIELDS,
+  ldapFromConfiguration,
+  validateLdap,
+} from "@/components/LdapLogin";
 
 export default {
   name: "Settings",
+  components: { LdapLogin },
   mixins: [
     TaskService,
     IconService,
@@ -618,15 +574,11 @@ export default {
         lets_encrypt: false,
         restore: true,
         ldap_enabled: false,
-        ldap_url: "",
-        ldap_base_dn: "",
-        ldap_bind_dn: "",
-        ldap_bind_password: "",
-        ldap_bind_password_set: false,
-        ldap_user_attribute: "sAMAccountName",
-        ldap_group: "",
-        ldap_domain: "",
       },
+      ldap: ldapFromConfiguration({}),
+      ldap_bind_password_set: false,
+      user_domains: [],
+      ldapErrors: {},
       devices: [],
       upload: {
         name: "",
@@ -841,21 +793,26 @@ export default {
         lets_encrypt: !!c.lets_encrypt,
         restore: c.selfservice_restore !== false,
         ldap_enabled: !!c.ldap_enabled,
-        ldap_url: c.ldap_url || "",
-        ldap_base_dn: c.ldap_base_dn || "",
-        ldap_bind_dn: c.ldap_bind_dn || "",
-        ldap_bind_password: "",
-        ldap_bind_password_set: !!c.ldap_bind_password_set,
-        ldap_user_attribute: c.ldap_user_attribute || "sAMAccountName",
-        ldap_group: c.ldap_group || "",
-        ldap_domain: c.ldap_domain || "",
       };
+      this.user_domains = c.user_domains || [];
+      this.ldap = ldapFromConfiguration(c);
+      this.ldap_bind_password_set = !!c.ldap_bind_password_set;
       this.devices = c.devices || [];
       this.scheduleProgressPoll();
     },
     async saveSelfService() {
-      this.loading.selfService = true;
       this.error.selfService = "";
+      this.ldapErrors = {};
+      if (this.ss.ldap_enabled) {
+        const ldapErrors = validateLdap(this.ldap, this.ldap_bind_password_set);
+        if (ldapErrors.length) {
+          for (const [field, msg] of ldapErrors)
+            this.$set(this.ldapErrors, field, msg);
+          this.$refs.ldap.focus(ldapErrors[0][0]);
+          return;
+        }
+      }
+      this.loading.selfService = true;
       const taskAction = "configure-module";
       const eventId = this.getUuid();
       const data = {
@@ -866,26 +823,26 @@ export default {
         lets_encrypt: this.ss.lets_encrypt,
         selfservice_restore: this.ss.restore,
         ldap_enabled: this.ss.ldap_enabled,
-        ldap_url: this.ss.ldap_url,
-        ldap_base_dn: this.ss.ldap_base_dn,
-        ldap_bind_dn: this.ss.ldap_bind_dn,
-        ldap_user_attribute: this.ss.ldap_user_attribute,
-        ldap_group: this.ss.ldap_group,
-        ldap_domain: this.ss.ldap_domain,
+        // the bind password is sent empty unless a new one was typed: empty keeps the stored one
+        ...this.ldap,
       };
-      // Only send the bind password when the admin typed a new one (empty keeps the stored one).
-      if (this.ss.ldap_bind_password)
-        data.ldap_bind_password = this.ss.ldap_bind_password;
       this.core.$root.$once(`${taskAction}-aborted-${eventId}`, () => {
         this.loading.selfService = false;
         this.error.selfService = this.$t("error.generic_error");
       });
       this.core.$root.$once(
         `${taskAction}-validation-failed-${eventId}`,
-        (ctx, res) => {
+        (validationErrors) => {
           this.loading.selfService = false;
-          this.error.selfService = this.$t("error.generic_error");
-          console.error("validation failed", res);
+          let shown = false;
+          for (const e of validationErrors || []) {
+            if (LDAP_FIELDS.includes(e.field)) {
+              this.$set(this.ldapErrors, e.field, "ldap_login." + e.error);
+              if (!shown) this.$refs.ldap.focus(e.field);
+              shown = true;
+            }
+          }
+          if (!shown) this.error.selfService = this.$t("error.generic_error");
         }
       );
       this.core.$root.$once(`${taskAction}-completed-${eventId}`, () => {
