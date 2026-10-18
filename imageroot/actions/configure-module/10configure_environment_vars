@@ -25,6 +25,8 @@ agent.set_env("IDEVICE_INCLUDE_BACKUPS", "true" if include else "false")
 
 # Automatic backups (scheduler). Enable + interval in hours; the hourly timer
 # checks which devices are due.
+if "autobackup_require_power" in data:
+    agent.set_env("AUTOBACKUP_REQUIRE_POWER", "true" if data.get("autobackup_require_power") else "false")
 if "autobackup_enabled" in data:
     agent.set_env("AUTOBACKUP_ENABLED", "true" if data.get("autobackup_enabled") else "false")
 if data.get("autobackup_interval_hours") is not None:
@@ -32,6 +34,15 @@ if data.get("autobackup_interval_hours") is not None:
         agent.set_env("AUTOBACKUP_INTERVAL_HOURS", str(max(1, int(data["autobackup_interval_hours"]))))
     except (TypeError, ValueError):
         pass
+
+# Mail about devices without a successful backup (pypkg/backupnotify.py);
+# keys not sent keep their value.
+if "notify_mail_to" in data:
+    agent.set_env("NOTIFY_MAIL_TO", (data.get("notify_mail_to") or "").strip())
+if "notify_owners" in data:
+    agent.set_env("NOTIFY_OWNERS", "true" if data.get("notify_owners") else "false")
+if data.get("notify_overdue_days") is not None:
+    agent.set_env("NOTIFY_OVERDUE_DAYS", str(max(1, int(data["notify_overdue_days"]))))
 
 # Rewrite state-include.conf so the NS8 backup carries (or omits) volumes/idevice-data.
 env = dict(os.environ)

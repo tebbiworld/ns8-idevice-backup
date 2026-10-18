@@ -138,6 +138,31 @@
             "title": "Directory type",
             "description": "ad (Active Directory, Samba) or rfc2307 (OpenLDAP posixAccount).",
             "default": "ad"
+        },
+        "notify_mail_to": {
+            "type": "string",
+            "maxLength": 254,
+            "pattern": "^$|^[^@\\s]+@[^@\\s]+$",
+            "title": "Overdue mail to",
+            "description": "Address that gets a mail through the cluster smarthost when a device has had no successful backup for notify_overdue_days; empty = no admin mail."
+        },
+        "notify_owners": {
+            "type": "boolean",
+            "title": "Mail the device owners",
+            "description": "Also mail the owner (address read from the directory at portal login)."
+        },
+        "notify_overdue_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365,
+            "title": "Overdue after (days)",
+            "default": 14
+        },
+        "autobackup_require_power": {
+            "type": "boolean",
+            "title": "Only on power",
+            "description": "Automatic backups only while the device is connected to a charger (checked over WiFi before each run).",
+            "default": false
         }
     }
 }

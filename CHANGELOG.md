@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Mail when a backup is overdue.** With automatic backups on, a device without a successful backup for a number of days (default 14) triggers a mail through the cluster smarthost to an admin address and, optionally, to the owner (address read from the directory at portal login); at most once a week per device. Found with a phone that silently had no backup for three weeks.
+
+- **Back up only while on the charger** (option for automatic backups, off by default): the device is asked over WiFi whether it is connected to power before each automatic run; if not, the run waits for a later hour without an error. `idevice-tool ping` also reports power, charging and battery level.
+
+### Fixed
+
+- **Sleeping iPhones were never backed up automatically.** An iPhone asleep on WiFi drops the first connection attempt and answers the next one at once, but pymobiledevice3 tried once with a 1 s timeout. The engine now tries up to 4 times (5 s each, `IDEVICE_CONNECT_ATTEMPTS` / `IDEVICE_CONNECT_TIMEOUT`). Found with a phone that had no backup for three weeks although it was on the WiFi.
+
+### Changed
+
+- The module declares the minimum NS8 core it was tested with (`org.nethserver.min-core` 3.22.0).
+
 ## 1.5.0 — 2026-10-18
 
 ### Added

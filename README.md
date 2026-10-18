@@ -140,6 +140,26 @@ The directory login code is shared with ns8-clamav and kept identical there:
 `device/ldapauth.py`, `imageroot/pypkg/ldapsettings.py`,
 `ui/src/components/LdapLogin.vue`.
 
+## Back up only on power
+
+*Only while on the charger* (automatic backups): before each automatic backup
+the module asks the device over WiFi (lockdown domain
+`com.apple.mobile.battery`, `ExternalConnected`) whether it is connected to
+power. If not, or if it cannot be asked, the backup waits for a later hourly
+run without recording an error. A long wait is reported by the overdue mail.
+Backups started by hand are not affected.
+
+## Overdue backups
+
+With automatic backups on, the hourly run can also send a mail when a device
+has had no successful backup for a number of days (default 14): to the
+address in *Mail when a backup is overdue* and, optionally, to the device
+owner (the address the portal reads from the directory when the owner logs
+in). At most one mail per device and week; a successful backup resets it. The
+mail goes through the cluster smarthost and names the last result and error,
+e.g. "could not reach the device" when the iPhone was not on the WiFi at the
+times the automatic backup ran.
+
 ## Restore to a device
 
 Restoring writes a stored snapshot back **onto** the device and reboots it, so it
