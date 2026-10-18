@@ -122,13 +122,13 @@ def _is_member(s, conn, user_dn, uid):
 
 
 def authenticate(s, login, password):
-    """Return {"uid", "display", "dn"} for a valid login, else None."""
+    """Return {"uid", "display", "mail", "dn"} for a valid login, else None."""
     # an empty password would be an anonymous (always successful) bind
     if not s.configured or not login or not password:
         return None
     try:
         with s.connect(s.bind_dn, s.bind_password) as conn:
-            conn.search(s.base_dn, _user_filter(s, login), attributes=[s.user_attribute, "displayName"])
+            conn.search(s.base_dn, _user_filter(s, login), attributes=[s.user_attribute, "displayName", "mail"])
             if len(conn.entries) != 1:
                 return None
             entry = conn.entries[0]
@@ -136,6 +136,7 @@ def authenticate(s, login, password):
             attrs = entry.entry_attributes_as_dict
             uid = str((attrs.get(s.user_attribute) or [login])[0])
             display = str((attrs.get("displayName") or [uid])[0])
+            mail = str((attrs.get("mail") or [""])[0])
             if s.group and not _is_member(s, conn, user_dn, uid):
                 _log(f"login refused: {uid} is not a member of {s.group}")
                 return None
@@ -150,4 +151,4 @@ def authenticate(s, login, password):
         s.connect(user_dn, password).unbind()
     except ldap3.core.exceptions.LDAPException:
         return None
-    return {"uid": uid, "display": display, "dn": user_dn}
+    return {"uid": uid, "display": display, "mail": mail, "dn": user_dn}

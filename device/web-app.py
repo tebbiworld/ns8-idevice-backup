@@ -217,10 +217,10 @@ def _record_failure(*keys):
 
 
 def ldap_authenticate(login, password):
-    """(uid, display name) of a valid directory login, else None (ldapauth.py:
-    a user domain of the cluster or an LDAP server of its own)."""
+    """(uid, display name, mail) of a valid directory login, else None
+    (ldapauth.py: a user domain of the cluster or an LDAP server of its own)."""
     res = ldapauth.authenticate(LDAP, login, password)
-    return (res["uid"], res["display"]) if res else None
+    return (res["uid"], res["display"], res.get("mail") or "") if res else None
 
 
 # ----------------------------------------------------------------------- registry
@@ -733,6 +733,23 @@ def favicon():
     return resp
 
 
+def _remember_owner_mail(uid, mail):
+    """Keep the directory mail address with the user's devices, for the
+    overdue-backup mail (pypkg/backupnotify.py)."""
+    try:
+        with registry_locked():
+            devices = load_devices()
+            changed = False
+            for dev in devices.values():
+                if owns(dev, uid) and dev.get("owner_mail", "") != mail:
+                    dev["owner_mail"] = mail
+                    changed = True
+            if changed:
+                save_devices(devices)
+    except Exception as exc:
+        print(f"cannot store the owner mail: {type(exc).__name__}", file=sys.stderr)
+
+
 @app.get("/login")
 def login_form():
     if session.get("uid"):
@@ -755,7 +772,8 @@ def login():
         audit("login", uid=attempted, result="fail", src=request.remote_addr)
         time.sleep(1)  # slow down password guessing
         return redirect(url_for("login_form", e=1))
-    uid, display = res
+    uid, display, mail = res
+    _remember_owner_mail(uid, mail)
     audit("login", uid=uid, result="ok", src=request.remote_addr)
     keep = session.get("csrf")
     session.clear()
@@ -763,6 +781,7 @@ def login():
     session.permanent = True
     session["uid"] = uid
     session["display"] = display
+    session["mail"] = mail
     return redirect(url_for("index"))
 
 
@@ -827,6 +846,7 @@ def device_add():
             "name": (request.form.get("name") or "").strip() or d.get("name") or udid,
             "ip": (request.form.get("ip") or "").strip() or d.get("ip", ""),
             "owner": uid,
+            "owner_mail": session.get("mail", "") or d.get("owner_mail", ""),
             "paired_at": int(time.time()),
         })
         if LDAP_DOMAIN:
